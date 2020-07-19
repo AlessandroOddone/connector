@@ -1,0 +1,9 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm'
+}
+
+dependencies {
+    implementation deps.kotlin.stdlib
+    implementation deps.ktor.client_core.jvm
+    api deps.kotlinpoet
+}

@@ -1,0 +1,124 @@
+buildscript {
+    ext.deps = [
+            'coroutines'            : [
+                    'core': "org.jetbrains.kotlinx:kotlinx-coroutines-core:$COROUTINES_VERSION",
+                    'test': "org.jetbrains.kotlinx:kotlinx-coroutines-test:$COROUTINES_VERSION",
+            ],
+            'junit'                 : "junit:junit:$JUNIT_VERSION",
+            'kotlin'                : [
+                    'compiler'         : "org.jetbrains.kotlin:kotlin-compiler-embeddable:$KOTLIN_VERSION",
+                    'gradle_plugin'    : "org.jetbrains.kotlin:kotlin-gradle-plugin:$KOTLIN_VERSION",
+                    'gradle_plugin_api': "org.jetbrains.kotlin:kotlin-gradle-plugin-api:$KOTLIN_VERSION",
+                    'stdlib'           : "org.jetbrains.kotlin:kotlin-stdlib:$KOTLIN_VERSION",
+                    'symbol_processing': "org.jetbrains.kotlin:kotlin-symbol-processing-api:$KOTLIN_SYMBOL_PROCESSING_VERSION",
+            ],
+            'kotlinpoet'            : "com.squareup:kotlinpoet:$KOTLINPOET_VERSION",
+            'kotlin_compile_testing': "com.github.tschuchortdev:kotlin-compile-testing:$KOTLIN_COMPILE_TESTING_VERSION",
+            'ktlint_gradle_plugin'  : "org.jlleitschuh.gradle:ktlint-gradle:$KTLINT_GRADLE_PLUGIN_VERSION",
+            'ktor'                  : [
+                    'client_core'         : [
+                            'common': "io.ktor:ktor-client-core:$KTOR_VERSION",
+                            'jvm'   : "io.ktor:ktor-client-core-jvm:$KTOR_VERSION",
+                            'js'    : "io.ktor:ktor-client-core-js:$KTOR_VERSION",
+                            'native': "io.ktor:ktor-client-core-native:$KTOR_VERSION"
+                    ],
+                    'client_engine'       : [
+                            'okhttp': "io.ktor:ktor-client-okhttp:$KTOR_VERSION",
+                    ],
+                    'client_json'         : [
+                            'common': "io.ktor:ktor-client-json:$KTOR_VERSION",
+                            'jvm'   : "io.ktor:ktor-client-json-jvm:$KTOR_VERSION",
+                            'js'    : "io.ktor:ktor-client-json-js:$KTOR_VERSION",
+                            'native': "io.ktor:ktor-client-json-native:$KTOR_VERSION"
+                    ],
+                    'client_logging'      : [
+                            'common': "io.ktor:ktor-client-logging:$KTOR_VERSION",
+                            'jvm'   : "io.ktor:ktor-client-logging-jvm:$KTOR_VERSION",
+                            'js'    : "io.ktor:ktor-client-logging-js:$KTOR_VERSION",
+                            'native': "io.ktor:ktor-client-logging-native:$KTOR_VERSION"
+                    ],
+                    'client_mock'         : [
+                            'common': "io.ktor:ktor-client-mock:$KTOR_VERSION",
+                            'jvm'   : "io.ktor:ktor-client-mock-jvm:$KTOR_VERSION",
+                            'js'    : "io.ktor:ktor-client-mock-js:$KTOR_VERSION",
+                            'native': "io.ktor:ktor-client-mock-native:$KTOR_VERSION"
+                    ],
+                    'client_serialization': [
+                            'jvm': "io.ktor:ktor-client-serialization-jvm:$KTOR_VERSION",
+                    ],
+                    'http'                : [
+                            'common': "io.ktor:ktor-http:$KTOR_VERSION",
+                            'jvm'   : "io.ktor:ktor-http-jvm:$KTOR_VERSION",
+                            'js'    : "io.ktor:ktor-http-js:$KTOR_VERSION",
+                            'native': "io.ktor:ktor-http-native:$KTOR_VERSION"
+                    ],
+            ],
+            'serialization'         : [
+                    'plugin' : "org.jetbrains.kotlin:kotlin-serialization:$KOTLIN_VERSION",
+                    'runtime': [
+                            'common': "org.jetbrains.kotlinx:kotlinx-serialization-runtime-common:$KOTLINX_SERIALIZATION_VERSION",
+                            'jvm'   : "org.jetbrains.kotlinx:kotlinx-serialization-runtime:$KOTLINX_SERIALIZATION_VERSION",
+                            'js'    : "org.jetbrains.kotlinx:kotlinx-serialization-runtime-js:$KOTLINX_SERIALIZATION_VERSION",
+                            'native': "org.jetbrains.kotlinx:kotlinx-serialization-runtime-native:$KOTLINX_SERIALIZATION_VERSION"
+                    ]
+            ],
+    ]
+
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        maven { url 'https://dl.bintray.com/kotlin/kotlin-eap' }
+        google()
+        gradlePluginPortal()
+        jcenter()
+    }
+
+    dependencies {
+        classpath deps.kotlin.gradle_plugin
+        classpath deps.ktlint_gradle_plugin
+        classpath deps.serialization.plugin
+    }
+}
+
+subprojects { project ->
+    group = "$GROUP"
+    version = "$VERSION"
+
+    apply plugin: "org.jlleitschuh.gradle.ktlint"
+    apply plugin: "org.jlleitschuh.gradle.ktlint-idea"
+    apply plugin: 'maven-publish'
+
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        maven { url 'https://dl.bintray.com/kotlin/kotlin-eap' }
+        google()
+        gradlePluginPortal()
+        jcenter()
+    }
+
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        kotlinOptions.jvmTarget = "1.8"
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    if (!project.name.startsWith("sample")) {
+        publishing {
+            publications {
+                maven(MavenPublication) {
+                    groupId = project.group
+                    artifactId = project.name
+                    version = project.version
+                }
+            }
+        }
+    }
+
+    ktlint {
+        enableExperimentalRules = true
+    }
+}
