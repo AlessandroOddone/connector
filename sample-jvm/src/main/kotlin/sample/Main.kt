@@ -22,7 +22,6 @@ fun main() {
         api.post(
             userId = "1234",
             postId = "9876",
-            contentType = "application/json",
             header1 = "h1",
             header2 = "h2",
             query1 = "q1",

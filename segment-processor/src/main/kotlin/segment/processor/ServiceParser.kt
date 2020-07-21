@@ -185,8 +185,8 @@ class ServiceParser {
             parameterName to Type.Existing(typeName)
         }
 
-        // TODO add static headers from @Headers etc.
-        val headers: List<Pair<String, StringValue>> = allParameterAnnotations
+        val staticHeaders: List<Pair<String, StringValue>> = findStaticHeaders()
+        val dynamicHeaders: List<Pair<String, StringValue>> = allParameterAnnotations
             .filterIsInstance<HttpParameterAnnotation.Header>()
             .mapNotNull { headerAnnotation ->
                 val headerName = headerAnnotation.name
@@ -202,7 +202,7 @@ class ServiceParser {
             parameters = serviceFunctionParameters,
             method = httpMethodAnnotation.method,
             relativeUrl = relativeUrl,
-            headers = headers,
+            headers = staticHeaders + dynamicHeaders,
             requestBodyParameterName = requestBodyParameterName,
             responseBodyType = responseBodyType
         )
@@ -265,6 +265,29 @@ class ServiceParser {
                 queryParameters = queryParameters
             )
         }
+    }
+
+    private fun KSFunctionDeclaration.findStaticHeaders(): List<Pair<String, StringValue>> {
+        return annotations
+            .asSequence()
+            .filter { it.shortName.asString() == "Headers" }
+            .filter { it.resolveHttpAnnotationType() != null }
+            .flatMap { annotation ->
+                @Suppress("UNCHECKED_CAST")
+                val headerStrings = annotation.arguments[0].value as List<String>
+                headerStrings.asSequence().mapNotNull { headerString ->
+                    val colonSplits = headerString.split(":", limit = 2)
+                    if (colonSplits.size != 2) {
+                        fail(
+                            annotation,
+                            "@Headers values must be formatted as 'Name: Value', but '$headerString' was found."
+                        )
+                        return@mapNotNull null
+                    }
+                    colonSplits[0].trim() to Static(colonSplits[1].trim())
+                }
+            }
+            .toList()
     }
 
     private fun KSVariableParameter.findHttpParameterAnnotations(): List<HttpParameterAnnotation> {

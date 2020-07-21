@@ -43,3 +43,10 @@ annotation class Query(val name: String)
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
 annotation class Url
+
+/**
+ * Other function annotations
+ */
+
+@Target(AnnotationTarget.FUNCTION)
+annotation class Headers(vararg val values: String)
