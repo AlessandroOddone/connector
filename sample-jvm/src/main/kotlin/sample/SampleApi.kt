@@ -26,7 +26,7 @@ import segment.http.Query
         @Query("q1") query1: String,
         @Query("q2") query2: String,
         @Body body: Payload
-    ): String
+    ): Payload
 }
 
 @Serializable data class Payload(val text: String)

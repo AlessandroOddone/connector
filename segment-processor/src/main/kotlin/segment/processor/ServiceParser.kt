@@ -2,11 +2,11 @@ package segment.processor
 
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.TypeName
+import org.jetbrains.kotlin.ksp.processing.KSPLogger
 import org.jetbrains.kotlin.ksp.symbol.ClassKind
 import org.jetbrains.kotlin.ksp.symbol.KSAnnotation
 import org.jetbrains.kotlin.ksp.symbol.KSClassDeclaration
 import org.jetbrains.kotlin.ksp.symbol.KSFunctionDeclaration
-import org.jetbrains.kotlin.ksp.symbol.KSNode
 import org.jetbrains.kotlin.ksp.symbol.KSPropertyDeclaration
 import org.jetbrains.kotlin.ksp.symbol.KSType
 import org.jetbrains.kotlin.ksp.symbol.KSVariableParameter
@@ -20,25 +20,25 @@ import segment.codegen.RelativeUrl
 import segment.codegen.Service
 import segment.codegen.StringValue
 
-class ServiceParser {
+class ServiceParser(private val logger: KSPLogger) {
     fun parse(classDeclaration: KSClassDeclaration): Service = with(classDeclaration) {
         if (!isInterface || !isTopLevel) {
-            fail(classDeclaration, "@API target must be a top-level interface.")
+            logger.error("@API target must be a top-level interface.", classDeclaration)
         }
 
         if (superTypes.isNotEmpty()) {
-            fail(classDeclaration, "Supertypes are not allowed in @API interfaces.")
+            logger.error("Supertypes are not allowed in @API interfaces.", classDeclaration)
         }
 
         if (typeParameters.isNotEmpty()) {
-            fail(classDeclaration, "Type parameters are not allowed in @API interfaces.")
+            logger.error("Type parameters are not allowed in @API interfaces.", classDeclaration)
         }
 
         val serviceName = simpleName.getShortName()
         val serviceFunctions = declarations
             .mapNotNull { declaration ->
                 if (declaration is KSPropertyDeclaration) {
-                    fail(declaration, "Properties are not allowed in @API interfaces.")
+                    logger.error("Properties are not allowed in @API interfaces.", declaration)
                 }
                 (declaration as? KSFunctionDeclaration)?.parseServiceFunction()
             }
@@ -53,43 +53,43 @@ class ServiceParser {
     private fun KSFunctionDeclaration.parseServiceFunction(): Service.Function? {
         val httpMethodAnnotations = findHttpMethodAnnotations()
         if (httpMethodAnnotations.isEmpty()) {
-            fail(this, "All functions in @API interfaces must be annotated with an HTTP method.")
+            logger.error("All functions in @API interfaces must be annotated with an HTTP method.", this)
         }
         if (httpMethodAnnotations.size > 1) {
-            fail(this, "Multiple HTTP method annotations are not allowed on a function.")
+            logger.error("Multiple HTTP method annotations are not allowed on a function.", this)
         }
         if (!modifiers.contains(Modifier.SUSPEND)) {
-            fail(this, "All functions in @API interfaces must be suspension functions.")
+            logger.error("All functions in @API interfaces must be suspension functions.", this)
         }
         if (!isAbstract) {
-            fail(this, "Functions with a body are not allowed in @API interfaces.")
+            logger.error("Functions with a body are not allowed in @API interfaces.", this)
         }
         if (typeParameters.isNotEmpty()) {
-            fail(this, "Functions with type parameters are not allowed in @API interfaces.")
+            logger.error("Functions with type parameters are not allowed in @API interfaces.", this)
         }
 
         val allParameterAnnotations = parameters
             .flatMap { parameter ->
                 val parameterAnnotations = parameter.findHttpParameterAnnotations()
                 if (parameterAnnotations.isEmpty()) {
-                    fail(parameter, "Missing Segment annotation.")
+                    logger.error("Missing Segment annotation.", parameter)
                 }
                 if (parameterAnnotations.size > 1) {
-                    fail(parameter, "Multiple Segment annotations are not allowed on the same parameter.")
+                    logger.error("Multiple Segment annotations are not allowed on the same parameter.", parameter)
                 }
                 parameterAnnotations
             }
 
         val bodyAnnotations = allParameterAnnotations.filterIsInstance<HttpParameterAnnotation.Body>()
         if (bodyAnnotations.size > 1) {
-            fail(this, "Multiple @Body parameters are not allowed.")
+            logger.error("Multiple @Body parameters are not allowed.", this)
         }
         bodyAnnotations.forEach { bodyAnnotation ->
             httpMethodAnnotations.forEach { httpMethodAnnotation ->
                 if (!httpMethodAnnotation.method.allowsBody) {
-                    fail(
-                        bodyAnnotation.annotation,
-                        "@Body is not allowed in ${httpMethodAnnotation.method} requests."
+                    logger.error(
+                        "@Body is not allowed in ${httpMethodAnnotation.method} requests.",
+                        bodyAnnotation.annotation
                     )
                 }
             }
@@ -97,14 +97,14 @@ class ServiceParser {
 
         val urlAnnotations = allParameterAnnotations.filterIsInstance<HttpParameterAnnotation.Url>()
         if (urlAnnotations.size > 1) {
-            fail(this, "Multiple @Url parameters are not allowed.")
+            logger.error("Multiple @Url parameters are not allowed.", this)
         }
         httpMethodAnnotations.forEach { httpMethodAnnotation ->
             if (httpMethodAnnotation.relativePath == null && urlAnnotations.isEmpty()) {
-                fail(this, "URL must be provided either by @${httpMethodAnnotation.method} or via @Url.")
+                logger.error("URL must be provided either by @${httpMethodAnnotation.method} or via @Url.", this)
             }
             if (httpMethodAnnotation.relativePath != null && urlAnnotations.isNotEmpty()) {
-                fail(this, "URL cannot be provided by both @${httpMethodAnnotation.method} and @Url.")
+                logger.error("URL cannot be provided by both @${httpMethodAnnotation.method} and @Url.", this)
             }
         }
 
@@ -120,25 +120,25 @@ class ServiceParser {
 
             pathAnnotations.groupBy { it.name }.forEach { (name, occurrences) ->
                 if (occurrences.size > 1) {
-                    fail(
-                        this,
-                        "@Path '$name' was defined ${occurrences.size} times, but at most once is allowed."
+                    logger.error(
+                        "@Path '$name' was defined ${occurrences.size} times, but at most once is allowed.",
+                        this
                     )
                 }
                 if (!expectedPathParameterNames.contains(name)) {
                     occurrences.forEach { pathAnnotation ->
-                        fail(
-                            pathAnnotation.annotation,
-                            "@${httpMethodAnnotation.method} URL does not define a dynamic path parameter matching '$name'."
+                        logger.error(
+                            "@${httpMethodAnnotation.method} URL does not define a dynamic path parameter matching '$name'.",
+                            pathAnnotation.annotation
                         )
                     }
                 }
                 expectedPathParameterNames.remove(name)
             }
             expectedPathParameterNames.forEach { missingPathParameter ->
-                fail(
-                    this,
-                    "Missing @Path for '$missingPathParameter', which is defined in the @${httpMethodAnnotation.method} URL."
+                logger.error(
+                    "Missing @Path for '$missingPathParameter', which is defined in the @${httpMethodAnnotation.method} URL.",
+                    this
                 )
             }
         }
@@ -155,9 +155,9 @@ class ServiceParser {
                 val allQueryParameters: List<Pair<String, StringValue>> = urlQueryParameters + dynamicQueryParameters
                 allQueryParameters.groupBy { it.first }.forEach { (name, occurrences) ->
                     if (occurrences.size > 1) {
-                        fail(
-                            this,
-                            "@Query '$name' was defined ${occurrences.size} times, but at most once is allowed."
+                        logger.error(
+                            "@Query '$name' was defined ${occurrences.size} times, but at most once is allowed.",
+                            this
                         )
                     }
                 }
@@ -242,10 +242,10 @@ class ServiceParser {
                         when (val stringValue = value.parseUrlTemplatePart()) {
                             is Dynamic -> {
                                 val param = stringValue.parameterName
-                                fail(
-                                    annotation,
+                                logger.error(
                                     "Dynamic query parameters are not allowed in the URL, but {$param} was found. " +
-                                            "Use @Query function parameters instead."
+                                            "Use @Query function parameters instead.",
+                                    annotation
                                 )
                             }
                             is Static -> {
@@ -253,7 +253,7 @@ class ServiceParser {
                             }
                         }
                     } else {
-                        fail(annotation, "Invalid query parameter format: $queryParameter")
+                        logger.error("Invalid query parameter format: $queryParameter", annotation)
                     }
                 }
             }
@@ -278,9 +278,9 @@ class ServiceParser {
                 headerStrings.asSequence().mapNotNull { headerString ->
                     val colonSplits = headerString.split(":", limit = 2)
                     if (colonSplits.size != 2) {
-                        fail(
-                            annotation,
-                            "@Headers values must be formatted as 'Name: Value', but '$headerString' was found."
+                        logger.error(
+                            "@Headers values must be formatted as 'Name: Value', but '$headerString' was found.",
+                            annotation
                         )
                         return@mapNotNull null
                     }
@@ -339,10 +339,6 @@ class ServiceParser {
                 else -> null
             }
         }
-    }
-
-    private fun fail(target: KSNode, message: String) {
-        throw IllegalStateException(message)
     }
 }
 
