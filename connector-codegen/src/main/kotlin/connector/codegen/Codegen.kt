@@ -17,6 +17,8 @@ import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.UNIT
 import com.squareup.kotlinpoet.asClassName
 import com.squareup.kotlinpoet.buildCodeBlock
+import connector.codegen.util.nonNull
+import connector.http.HttpBodySerializer
 import io.ktor.client.HttpClient
 import io.ktor.client.features.ClientRequestException
 import io.ktor.client.features.RedirectResponseException
@@ -25,12 +27,10 @@ import io.ktor.client.features.ServerResponseException
 import io.ktor.http.ContentType
 import io.ktor.http.HeaderValueParam
 import io.ktor.http.Url
-import connector.codegen.util.nonNull
-import connector.http.HttpBodySerializer
 
 fun Service.toFileSpec(): FileSpec {
     requireNotNull(existingParentInterface)
-    val implementationClassName = "${name}GeneratedImpl"
+    val implementationClassName = "ConnectorGenerated$name"
     return FileSpec
         .builder(
             packageName = existingParentInterface.packageName,
