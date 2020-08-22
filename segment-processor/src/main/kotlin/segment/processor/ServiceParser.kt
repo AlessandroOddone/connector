@@ -1,24 +1,30 @@
 package segment.processor
 
-import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.TypeName
+import io.ktor.http.BadContentTypeFormatException
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import org.jetbrains.kotlin.ksp.processing.KSPLogger
-import org.jetbrains.kotlin.ksp.symbol.ClassKind
 import org.jetbrains.kotlin.ksp.symbol.KSAnnotation
 import org.jetbrains.kotlin.ksp.symbol.KSClassDeclaration
+import org.jetbrains.kotlin.ksp.symbol.KSDeclaration
 import org.jetbrains.kotlin.ksp.symbol.KSFunctionDeclaration
+import org.jetbrains.kotlin.ksp.symbol.KSNode
 import org.jetbrains.kotlin.ksp.symbol.KSPropertyDeclaration
 import org.jetbrains.kotlin.ksp.symbol.KSType
 import org.jetbrains.kotlin.ksp.symbol.KSVariableParameter
 import org.jetbrains.kotlin.ksp.symbol.Modifier
-import org.jetbrains.kotlin.ksp.symbol.Nullability
-import segment.codegen.Static
-import segment.codegen.HttpMethod
 import segment.codegen.Dynamic
-import segment.codegen.Type
+import segment.codegen.HttpMethod
 import segment.codegen.RelativeUrl
 import segment.codegen.Service
+import segment.codegen.Static
 import segment.codegen.StringValue
+import segment.processor.util.className
+import segment.processor.util.isInterface
+import segment.processor.util.isTopLevel
+import segment.processor.util.qualifier
+import segment.processor.util.typeName
 
 class ServiceParser(private val logger: KSPLogger) {
     fun parse(classDeclaration: KSClassDeclaration): Service = with(classDeclaration) {
@@ -46,7 +52,7 @@ class ServiceParser(private val logger: KSPLogger) {
         return Service(
             name = serviceName,
             functions = serviceFunctions,
-            existingParentInterface = ClassName.bestGuess(qualifiedName!!.asString())
+            existingParentInterface = className()
         )
     }
 
@@ -85,6 +91,16 @@ class ServiceParser(private val logger: KSPLogger) {
             logger.error("Multiple @Body parameters are not allowed.", this)
         }
         bodyAnnotations.forEach { bodyAnnotation ->
+            if (bodyAnnotation.contentType.isNotEmpty()) {
+                try {
+                    ContentType.parse(bodyAnnotation.contentType)
+                } catch (badFormatException: BadContentTypeFormatException) {
+                    logger.error(
+                        badFormatException.message ?: "Bad Content-Type format: ${bodyAnnotation.contentType}.",
+                        bodyAnnotation.annotation
+                    )
+                }
+            }
             httpMethodAnnotations.forEach { httpMethodAnnotation ->
                 if (!httpMethodAnnotation.method.allowsBody) {
                     logger.error(
@@ -121,7 +137,7 @@ class ServiceParser(private val logger: KSPLogger) {
             pathAnnotations.groupBy { it.name }.forEach { (name, occurrences) ->
                 if (occurrences.size > 1) {
                     logger.error(
-                        "@Path '$name' was defined ${occurrences.size} times, but at most once is allowed.",
+                        "@Path '$name' is defined ${occurrences.size} times, but at most once is allowed.",
                         this
                     )
                 }
@@ -156,7 +172,7 @@ class ServiceParser(private val logger: KSPLogger) {
                 allQueryParameters.groupBy { it.first }.forEach { (name, occurrences) ->
                     if (occurrences.size > 1) {
                         logger.error(
-                            "@Query '$name' was defined ${occurrences.size} times, but at most once is allowed.",
+                            "@Query '$name' is defined ${occurrences.size} times, but at most once is allowed.",
                             this
                         )
                     }
@@ -179,32 +195,92 @@ class ServiceParser(private val logger: KSPLogger) {
             return null
         }
 
-        val serviceFunctionParameters: Map<String, Type.Existing> = parameters.associate { parameter ->
-            val parameterName = parameter.name!!.asString()
-            val typeName = parameter.type!!.resolve()!!.typeName()!!
-            parameterName to Type.Existing(typeName)
+        val serviceFunctionParameters: Map<String, TypeName>? = allParameterAnnotations
+            .mapNotNull { httpParameterAnnotation ->
+                val parameterName = httpParameterAnnotation.parameter.name!!.asString()
+                val parameterType = httpParameterAnnotation.parameter.type!!.resolve()
+                val typeName = if (httpParameterAnnotation is HttpParameterAnnotation.Body) {
+                    parameterType?.typeNameWithSerializableChecks(
+                        node = httpParameterAnnotation.annotation,
+                        typeDescriptionForErrorMessage = "@Body parameter type"
+                    )
+                } else {
+                    parameterType?.typeName()
+                }
+                if (typeName == null) {
+                    val annotationName = httpParameterAnnotation.annotation.shortName.asString()
+                    logger.error(
+                        "Could not resolve the @$annotationName parameter type or one of its type arguments.",
+                        httpParameterAnnotation.parameter
+                    )
+                    return@mapNotNull null
+                }
+                parameterName to typeName
+            }
+            .toMap()
+            .takeIf { it.size == allParameterAnnotations.size }
+
+        val headers = mutableListOf<Pair<String, StringValue>>()
+        // dynamic headers
+        headers.addAll(
+            allParameterAnnotations
+                .asSequence()
+                .filterIsInstance<HttpParameterAnnotation.Header>()
+                .mapNotNull { headerAnnotation ->
+                    val headerName = headerAnnotation.name
+                    if (headerName == HttpHeaders.ContentType) {
+                        logger.error(
+                            "${HttpHeaders.ContentType} header cannot be defined via @Header. " +
+                                "Set the desired 'contentType' in a @Body parameter instead.",
+                            headerAnnotation.annotation
+                        )
+                        return@mapNotNull null
+                    }
+                    if (headerName == HttpHeaders.ContentLength) {
+                        logger.error(
+                            "${HttpHeaders.ContentLength} header cannot be defined via @Header.",
+                            headerAnnotation.annotation
+                        )
+                        return@mapNotNull null
+                    }
+                    val parameterName = headerAnnotation.parameter.name?.asString()
+                    parameterName?.let { headerName to Dynamic(parameterName) }
+                }
+        )
+        headers.addAll(findStaticHeaders())
+
+        val bodyParameterName = bodyAnnotations.getOrNull(0)?.parameter?.name?.asString()
+        val bodyContentType = bodyAnnotations.getOrNull(0)?.contentType
+        val requestBody = if (bodyParameterName != null && bodyContentType != null) {
+            Service.Function.Http.RequestBody(parameterName = bodyParameterName, contentType = bodyContentType)
+        } else {
+            null
         }
 
-        val staticHeaders: List<Pair<String, StringValue>> = findStaticHeaders()
-        val dynamicHeaders: List<Pair<String, StringValue>> = allParameterAnnotations
-            .filterIsInstance<HttpParameterAnnotation.Header>()
-            .mapNotNull { headerAnnotation ->
-                val headerName = headerAnnotation.name
-                val parameterName = headerAnnotation.parameter.name?.asString()
-                parameterName?.let { headerName to Dynamic(parameterName) }
-            }
+        val returnType = returnType?.resolve()
+        val returnTypeName = returnType
+            ?.typeNameWithSerializableChecks(this, typeDescriptionForErrorMessage = "Return type")
 
-        val requestBodyParameterName = bodyAnnotations.getOrNull(0)?.parameter?.name?.asString()
-        val responseBodyType = Type.Existing(name = returnType!!.resolve()!!.typeName()!!)
+        if (returnTypeName == null) {
+            logger.error(
+                "Could not resolve the HTTP function return type or one of its type arguments.",
+                this
+            )
+            return null
+        }
+
+        if (serviceFunctionParameters == null) {
+            return null
+        }
 
         return Service.Function.Http(
             name = simpleName.asString(),
             parameters = serviceFunctionParameters,
             method = httpMethodAnnotation.method,
             relativeUrl = relativeUrl,
-            headers = staticHeaders + dynamicHeaders,
-            requestBodyParameterName = requestBodyParameterName,
-            responseBodyType = responseBodyType
+            headers = headers,
+            requestBody = requestBody,
+            returnType = returnTypeName
         )
     }
 
@@ -243,8 +319,8 @@ class ServiceParser(private val logger: KSPLogger) {
                             is Dynamic -> {
                                 val param = stringValue.parameterName
                                 logger.error(
-                                    "Dynamic query parameters are not allowed in the URL, but {$param} was found. " +
-                                            "Use @Query function parameters instead.",
+                                    "Dynamic query parameters are not allowed in the URL. Found: {$param}. " +
+                                        "Use @Query function parameters instead.",
                                     annotation
                                 )
                             }
@@ -253,7 +329,7 @@ class ServiceParser(private val logger: KSPLogger) {
                             }
                         }
                     } else {
-                        logger.error("Invalid query parameter format: $queryParameter", annotation)
+                        logger.error("Invalid query parameter format: $queryParameter.", annotation)
                     }
                 }
             }
@@ -279,12 +355,29 @@ class ServiceParser(private val logger: KSPLogger) {
                     val colonSplits = headerString.split(":", limit = 2)
                     if (colonSplits.size != 2) {
                         logger.error(
-                            "@Headers values must be formatted as 'Name: Value', but '$headerString' was found.",
+                            "@Headers values must be formatted as 'Name: Value'. Found: '$headerString'.",
                             annotation
                         )
                         return@mapNotNull null
                     }
-                    colonSplits[0].trim() to Static(colonSplits[1].trim())
+                    val name = colonSplits[0].trim()
+                    if (name == HttpHeaders.ContentType) {
+                        logger.error(
+                            "${HttpHeaders.ContentType} header cannot be defined via @Headers. " +
+                                "Set the desired 'contentType' in a @Body parameter instead.",
+                            annotation
+                        )
+                        return@mapNotNull null
+                    }
+                    if (name == HttpHeaders.ContentLength) {
+                        logger.error(
+                            "${HttpHeaders.ContentLength} header cannot be defined via @Headers.",
+                            annotation
+                        )
+                        return@mapNotNull null
+                    }
+                    val value = colonSplits[1].trim()
+                    name to Static(value)
                 }
             }
             .toList()
@@ -295,7 +388,19 @@ class ServiceParser(private val logger: KSPLogger) {
             when (annotation.shortName.asString()) {
                 "Body" -> {
                     val resolvedAnnotationType = annotation.resolveHttpAnnotationType() ?: return@mapNotNull null
+                    val contentType = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
+                    validateContentType(contentType, annotation)
                     HttpParameterAnnotation.Body(
+                        contentType = contentType,
+                        parameter = this,
+                        annotation = annotation,
+                        annotationType = resolvedAnnotationType
+                    )
+                }
+                "JsonBody" -> {
+                    val resolvedAnnotationType = annotation.resolveHttpAnnotationType() ?: return@mapNotNull null
+                    HttpParameterAnnotation.Body(
+                        contentType = ContentType.Application.Json.toString(),
                         parameter = this,
                         annotation = annotation,
                         annotationType = resolvedAnnotationType
@@ -303,8 +408,9 @@ class ServiceParser(private val logger: KSPLogger) {
                 }
                 "Header" -> {
                     val resolvedAnnotationType = annotation.resolveHttpAnnotationType() ?: return@mapNotNull null
+                    val name = annotation.arguments.getOrNull(0)?.value ?: return@mapNotNull null
                     HttpParameterAnnotation.Header(
-                        name = annotation.arguments[0].value as String,
+                        name = name as String,
                         parameter = this,
                         annotation = annotation,
                         annotationType = resolvedAnnotationType
@@ -312,8 +418,9 @@ class ServiceParser(private val logger: KSPLogger) {
                 }
                 "Path" -> {
                     val resolvedAnnotationType = annotation.resolveHttpAnnotationType() ?: return@mapNotNull null
+                    val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
                     HttpParameterAnnotation.Path(
-                        name = annotation.arguments[0].value as String,
+                        name = name,
                         parameter = this,
                         annotation = annotation,
                         annotationType = resolvedAnnotationType
@@ -321,8 +428,9 @@ class ServiceParser(private val logger: KSPLogger) {
                 }
                 "Query" -> {
                     val resolvedAnnotationType = annotation.resolveHttpAnnotationType() ?: return@mapNotNull null
+                    val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
                     HttpParameterAnnotation.Query(
-                        name = annotation.arguments[0].value as String,
+                        name = name,
                         parameter = this,
                         annotation = annotation,
                         annotationType = resolvedAnnotationType
@@ -340,6 +448,45 @@ class ServiceParser(private val logger: KSPLogger) {
             }
         }
     }
+
+    private fun KSType.typeNameWithSerializableChecks(
+        node: KSNode,
+        typeDescriptionForErrorMessage: String
+    ): TypeName? {
+        fun KSDeclaration.isSerializable(): Boolean {
+            return qualifiedName?.let { BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.contains(it.asString()) } == true ||
+                annotations.any {
+                    it.shortName.asString() == "Serializable" &&
+                        it.annotationType.resolve()?.qualifier() == "kotlinx.serialization"
+                }
+        }
+
+        if (!declaration.isSerializable()) {
+            val typeName = with(declaration) { (qualifiedName ?: simpleName).asString() }
+            logger.error(
+                "$typeDescriptionForErrorMessage '$typeName' is neither @Serializable " +
+                    "nor one of: $BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES",
+                node
+            )
+        }
+
+        return typeName { typeArgument, type ->
+            if (!type.declaration.isSerializable()) {
+                val typeName = with(type.declaration) { (qualifiedName ?: simpleName).asString() }
+                logger.error(
+                    "$typeDescriptionForErrorMessage type argument '$typeName' is neither @Serializable " +
+                        "nor one of: $BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES",
+                    typeArgument
+                )
+            }
+        }
+    }
+
+    private fun validateContentType(contentType: String, node: KSNode) = try {
+        ContentType.parse(contentType)
+    } catch (e: BadContentTypeFormatException) {
+        logger.error("Invalid content type: '$contentType'", node)
+    }
 }
 
 private data class HttpMethodAnnotation(
@@ -356,6 +503,7 @@ private sealed class HttpParameterAnnotation {
     abstract val annotationType: KSType
 
     data class Body(
+        val contentType: String,
         override val parameter: KSVariableParameter,
         override val annotation: KSAnnotation,
         override val annotationType: KSType
@@ -399,16 +547,41 @@ private fun String.parseUrlTemplatePart(): StringValue =
 private fun KSAnnotation.resolveHttpAnnotationType(): KSType? =
     annotationType.resolve()?.takeIf { it.qualifier() == HTTP_ANNOTATIONS_PACKAGE_NAME }
 
-private fun KSType.qualifier() = declaration.qualifiedName?.getQualifier()
-
-private val KSClassDeclaration.isInterface get() = classKind == ClassKind.INTERFACE
-
-private val KSClassDeclaration.isTopLevel get() = parentDeclaration == null
-
-private fun KSType.typeName(): TypeName? {
-    return declaration.qualifiedName?.asString()
-        ?.let { ClassName.bestGuess(it) }
-        ?.copy(nullable = nullability == Nullability.NULLABLE)
-}
-
 private const val HTTP_ANNOTATIONS_PACKAGE_NAME = "segment.http"
+
+private val BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES = listOf(
+    "kotlin.Unit",
+
+    // primitives
+    "kotlin.Boolean",
+    "kotlin.Byte",
+    "kotlin.Char",
+    "kotlin.Double",
+    "kotlin.Float",
+    "kotlin.Int",
+    "kotlin.Long",
+    "kotlin.Short",
+    "kotlin.String",
+
+    // tuples
+    "kotlin.Pair",
+    "kotlin.Triple",
+    "kotlin.collections.Map.Entry",
+
+    // arrays
+    "kotlin.Array",
+    "kotlin.BooleanArray",
+    "kotlin.ByteArray",
+    "kotlin.CharArray",
+    "kotlin.DoubleArray",
+    "kotlin.FloatArray",
+    "kotlin.IntArray",
+    "kotlin.LongArray",
+    "kotlin.ShortArray",
+    "kotlin.StringArray",
+
+    // collections
+    "kotlin.collections.List",
+    "kotlin.collections.Map",
+    "kotlin.collections.Set"
+)

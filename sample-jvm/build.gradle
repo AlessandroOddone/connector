@@ -14,7 +14,7 @@ dependencies {
     implementation deps.ktor.client_logging.jvm
     implementation deps.ktor.client_mock.jvm
     implementation deps.ktor.client_engine.okhttp
-    implementation deps.ktor.client_serialization.jvm
+    implementation deps.serialization.runtime.jvm
     implementation(project(":segment-runtime-http"))
     ksp(project(":segment-processor"))
 }

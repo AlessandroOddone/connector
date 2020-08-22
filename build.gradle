@@ -56,8 +56,8 @@ buildscript {
             'serialization'         : [
                     'plugin' : "org.jetbrains.kotlin:kotlin-serialization:$KOTLIN_VERSION",
                     'runtime': [
-                            'common': "org.jetbrains.kotlinx:kotlinx-serialization-runtime-common:$KOTLINX_SERIALIZATION_VERSION",
-                            'jvm'   : "org.jetbrains.kotlinx:kotlinx-serialization-runtime:$KOTLINX_SERIALIZATION_VERSION",
+                            'common': "org.jetbrains.kotlinx:kotlinx-serialization-runtime:$KOTLINX_SERIALIZATION_VERSION",
+                            'jvm'   : "org.jetbrains.kotlinx:kotlinx-serialization-runtime-jvm:$KOTLINX_SERIALIZATION_VERSION",
                             'js'    : "org.jetbrains.kotlinx:kotlinx-serialization-runtime-js:$KOTLINX_SERIALIZATION_VERSION",
                             'native': "org.jetbrains.kotlinx:kotlinx-serialization-runtime-native:$KOTLINX_SERIALIZATION_VERSION"
                     ]
@@ -66,11 +66,11 @@ buildscript {
 
     repositories {
         mavenLocal()
-        mavenCentral()
-        maven { url 'https://dl.bintray.com/kotlin/kotlin-eap' }
-        google()
-        gradlePluginPortal()
         jcenter()
+        google()
+        maven { url 'https://dl.bintray.com/kotlin/kotlin-eap' }
+        mavenCentral()
+        gradlePluginPortal()
     }
 
     dependencies {
@@ -84,17 +84,15 @@ subprojects { project ->
     group = "$GROUP"
     version = "$VERSION"
 
-    apply plugin: "org.jlleitschuh.gradle.ktlint"
-    apply plugin: "org.jlleitschuh.gradle.ktlint-idea"
     apply plugin: 'maven-publish'
 
     repositories {
         mavenLocal()
-        mavenCentral()
-        maven { url 'https://dl.bintray.com/kotlin/kotlin-eap' }
-        google()
-        gradlePluginPortal()
         jcenter()
+        google()
+        maven { url 'https://dl.bintray.com/kotlin/kotlin-eap' }
+        mavenCentral()
+        gradlePluginPortal()
     }
 
     tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
@@ -116,6 +114,14 @@ subprojects { project ->
                 }
             }
         }
+    }
+}
+
+allprojects {
+    apply plugin: "org.jlleitschuh.gradle.ktlint"
+
+    repositories {
+        gradlePluginPortal()
     }
 
     ktlint {

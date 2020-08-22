@@ -1,7 +1,7 @@
 package segment.http
 
 /**
- * Http method annotations
+ * Http Methods
  */
 
 @Target(AnnotationTarget.FUNCTION)
@@ -26,14 +26,8 @@ annotation class POST(val url: String = "")
 annotation class PUT(val url: String = "")
 
 /**
- * Parameter annotations
+ * URL
  */
-
-@Target(AnnotationTarget.VALUE_PARAMETER)
-annotation class Body
-
-@Target(AnnotationTarget.VALUE_PARAMETER)
-annotation class Header(val name: String)
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
 annotation class Path(val name: String)
@@ -45,8 +39,21 @@ annotation class Query(val name: String)
 annotation class Url
 
 /**
- * Other function annotations
+ * Headers
  */
 
 @Target(AnnotationTarget.FUNCTION)
 annotation class Headers(vararg val values: String)
+
+@Target(AnnotationTarget.VALUE_PARAMETER)
+annotation class Header(val name: String)
+
+/**
+ * Body
+ */
+
+@Target(AnnotationTarget.VALUE_PARAMETER)
+annotation class Body(val contentType: String)
+
+@Target(AnnotationTarget.VALUE_PARAMETER)
+annotation class JsonBody

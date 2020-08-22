@@ -9,7 +9,6 @@ import org.jetbrains.kotlin.ksp.symbol.KSClassDeclaration
 import org.jetbrains.kotlin.ksp.symbol.KSNode
 import segment.codegen.toFileSpec
 import java.io.OutputStreamWriter
-import java.lang.IllegalStateException
 import java.nio.charset.StandardCharsets.UTF_8
 
 class SegmentProcessor : SymbolProcessor {
@@ -27,7 +26,7 @@ class SegmentProcessor : SymbolProcessor {
             // workaround until error logging works correctly with Gradle plugin
             // https://github.com/android/kotlin/issues/1
             object : KSPLogger by logger {
-                override fun error(message: String, symbol: KSNode) {
+                override fun error(message: String, symbol: KSNode?) {
                     throw IllegalStateException(message)
                 }
             }

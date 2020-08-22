@@ -31,6 +31,7 @@ kotlin {
             dependencies {
                 implementation kotlin('stdlib-common')
                 api deps.ktor.client_core.common
+                api deps.serialization.runtime.common
                 api(project(":segment-runtime-core"))
             }
         }
