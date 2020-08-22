@@ -1,4 +1,4 @@
-rootProject.name = "segment"
+rootProject.name = "connector"
 
 enableFeaturePreview("GRADLE_METADATA")
 
@@ -22,10 +22,10 @@ pluginManagement {
 }
 
 include(
-    ":segment-codegen",
-    ":segment-processor",
-    ":segment-http",
-    ":segment-runtime-core",
-    ":segment-runtime-http",
+    ":connector-codegen",
+    ":connector-processor",
+    ":connector-http",
+    ":connector-runtime-core",
+    ":connector-runtime-http",
     ":sample-jvm"
 )

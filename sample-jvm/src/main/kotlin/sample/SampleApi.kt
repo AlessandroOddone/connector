@@ -1,17 +1,17 @@
 package sample
 
+import connector.API
+import connector.http.Body
+import connector.http.GET
+import connector.http.Header
+import connector.http.Headers
+import connector.http.JsonBody
+import connector.http.POST
+import connector.http.Path
+import connector.http.Query
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import segment.API
-import segment.http.Body
-import segment.http.GET
-import segment.http.Header
-import segment.http.Headers
-import segment.http.JsonBody
-import segment.http.POST
-import segment.http.Path
-import segment.http.Query
 import kotlin.String
 import kotlin.collections.List
 import kotlin.collections.Map

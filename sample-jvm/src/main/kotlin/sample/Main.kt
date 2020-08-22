@@ -1,5 +1,6 @@
 package sample
 
+import connector.http.HttpBodySerializer
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -23,7 +24,6 @@ import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import segment.http.HttpBodySerializer
 
 private val BASE_URL = Url("https://sample/")
 

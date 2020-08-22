@@ -15,8 +15,8 @@ dependencies {
     implementation deps.ktor.client_mock.jvm
     implementation deps.ktor.client_engine.okhttp
     implementation deps.serialization.runtime.jvm
-    implementation(project(":segment-runtime-http"))
-    ksp(project(":segment-processor"))
+    implementation(project(":connector-runtime-http"))
+    ksp(project(":connector-processor"))
 }
 
 compileKotlin {
