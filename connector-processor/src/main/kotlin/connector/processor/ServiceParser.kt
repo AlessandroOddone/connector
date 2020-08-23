@@ -1,6 +1,17 @@
 package connector.processor
 
 import com.squareup.kotlinpoet.TypeName
+import connector.codegen.Dynamic
+import connector.codegen.HttpMethod
+import connector.codegen.RelativeUrl
+import connector.codegen.Service
+import connector.codegen.Static
+import connector.codegen.StringValue
+import connector.processor.util.className
+import connector.processor.util.isInterface
+import connector.processor.util.isTopLevel
+import connector.processor.util.qualifier
+import connector.processor.util.typeName
 import io.ktor.http.BadContentTypeFormatException
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -14,37 +25,26 @@ import org.jetbrains.kotlin.ksp.symbol.KSPropertyDeclaration
 import org.jetbrains.kotlin.ksp.symbol.KSType
 import org.jetbrains.kotlin.ksp.symbol.KSVariableParameter
 import org.jetbrains.kotlin.ksp.symbol.Modifier
-import connector.codegen.Dynamic
-import connector.codegen.HttpMethod
-import connector.codegen.RelativeUrl
-import connector.codegen.Service
-import connector.codegen.Static
-import connector.codegen.StringValue
-import connector.processor.util.className
-import connector.processor.util.isInterface
-import connector.processor.util.isTopLevel
-import connector.processor.util.qualifier
-import connector.processor.util.typeName
 
 class ServiceParser(private val logger: KSPLogger) {
     fun parse(classDeclaration: KSClassDeclaration): Service = with(classDeclaration) {
         if (!isInterface || !isTopLevel) {
-            logger.error("@API target must be a top-level interface.", classDeclaration)
+            logger.error("@Service target must be a top-level interface.", classDeclaration)
         }
 
         if (superTypes.isNotEmpty()) {
-            logger.error("Supertypes are not allowed in @API interfaces.", classDeclaration)
+            logger.error("Supertypes are not allowed in @Service interfaces.", classDeclaration)
         }
 
         if (typeParameters.isNotEmpty()) {
-            logger.error("Type parameters are not allowed in @API interfaces.", classDeclaration)
+            logger.error("Type parameters are not allowed in @Service interfaces.", classDeclaration)
         }
 
         val serviceName = simpleName.getShortName()
         val serviceFunctions = declarations
             .mapNotNull { declaration ->
                 if (declaration is KSPropertyDeclaration) {
-                    logger.error("Properties are not allowed in @API interfaces.", declaration)
+                    logger.error("Properties are not allowed in @Service interfaces.", declaration)
                 }
                 (declaration as? KSFunctionDeclaration)?.parseServiceFunction()
             }
@@ -59,19 +59,19 @@ class ServiceParser(private val logger: KSPLogger) {
     private fun KSFunctionDeclaration.parseServiceFunction(): Service.Function? {
         val httpMethodAnnotations = findHttpMethodAnnotations()
         if (httpMethodAnnotations.isEmpty()) {
-            logger.error("All functions in @API interfaces must be annotated with an HTTP method.", this)
+            logger.error("All functions in @Service interfaces must be annotated with an HTTP method.", this)
         }
         if (httpMethodAnnotations.size > 1) {
             logger.error("Multiple HTTP method annotations are not allowed on a function.", this)
         }
         if (!modifiers.contains(Modifier.SUSPEND)) {
-            logger.error("All functions in @API interfaces must be suspension functions.", this)
+            logger.error("All functions in @Service interfaces must be suspension functions.", this)
         }
         if (!isAbstract) {
-            logger.error("Functions with a body are not allowed in @API interfaces.", this)
+            logger.error("Functions with a body are not allowed in @Service interfaces.", this)
         }
         if (typeParameters.isNotEmpty()) {
-            logger.error("Functions with type parameters are not allowed in @API interfaces.", this)
+            logger.error("Functions with type parameters are not allowed in @Service interfaces.", this)
         }
 
         val allParameterAnnotations = parameters

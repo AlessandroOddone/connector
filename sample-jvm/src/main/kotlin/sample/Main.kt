@@ -28,10 +28,10 @@ import kotlinx.serialization.json.buildJsonObject
 private val BASE_URL = Url("https://sample/")
 
 fun main() {
-    val api: SampleApi = SampleApi(BASE_URL, httpClient, listOf(jsonBodySerializer))
+    val service: SampleService = SampleService(BASE_URL, httpClient, listOf(jsonBodySerializer))
     GlobalScope.launch(Dispatchers.Unconfined) {
-        api.get()
-        api.post(
+        service.get()
+        service.post(
             userId = "1234",
             postId = "9876",
             baseUrl = "h1",
@@ -40,7 +40,7 @@ fun main() {
             query2 = "q2",
             body = Wrapper(listOf("message 1", "message 2"))
         )
-        api.post(
+        service.post(
             mapOf(
                 "a" to listOf(
                     listOf(
@@ -63,8 +63,8 @@ fun main() {
                 "b" to emptyList()
             )
         )
-        api.postIgnoringResponseBody(null)
-        api.postReturningNullableUnit(null)
+        service.postIgnoringResponseBody(null)
+        service.postReturningNullableUnit(null)
     }
 }
 

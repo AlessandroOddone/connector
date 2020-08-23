@@ -1,6 +1,6 @@
 package sample
 
-import connector.API
+import connector.Service
 import connector.http.Body
 import connector.http.GET
 import connector.http.Header
@@ -16,8 +16,8 @@ import kotlin.String
 import kotlin.collections.List
 import kotlin.collections.Map
 
-@API
-interface SampleApi {
+@Service
+interface SampleService {
     @GET("get")
     suspend fun get(): Payload
 
