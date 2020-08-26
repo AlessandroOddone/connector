@@ -221,7 +221,7 @@ private fun Service.Function.Http.body(parentClassName: String): CodeBlock {
             for ((name, stringValue) in headers) {
                 if (stringValue is Static) {
                     addStatement("append(%S, %S)", name, stringValue.content)
-                    break
+                    continue
                 }
                 stringValue as Dynamic
                 val typeName = parameters.getValue(stringValue.parameterName)

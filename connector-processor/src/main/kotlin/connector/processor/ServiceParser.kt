@@ -363,7 +363,7 @@ class ServiceParser(private val logger: KSPLogger) {
                         )
                         return@mapNotNull null
                     }
-                    val name = colonSplits[0].trim()
+                    val name = colonSplits[0].trimEnd()
                     if (name == HttpHeaders.ContentType) {
                         logger.error(
                             "${HttpHeaders.ContentType} header cannot be defined via @Headers. " +
@@ -379,7 +379,7 @@ class ServiceParser(private val logger: KSPLogger) {
                         )
                         return@mapNotNull null
                     }
-                    val value = colonSplits[1].trim()
+                    val value = colonSplits[1].trimStart()
                     name to Static(value)
                 }
             }

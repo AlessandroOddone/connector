@@ -21,11 +21,8 @@ pluginManagement {
     }
 }
 
-include(
-    ":connector-codegen",
-    ":connector-processor",
-    ":connector-http",
-    ":connector-runtime-core",
-    ":connector-runtime-http",
-    ":sample-jvm"
-)
+include(":connector-codegen")
+include(":connector-processor")
+include(":connector-runtime-core")
+include(":connector-runtime-http")
+include(":integration-tests")

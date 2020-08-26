@@ -84,8 +84,6 @@ subprojects { project ->
     group = "$GROUP"
     version = "$VERSION"
 
-    apply plugin: 'maven-publish'
-
     repositories {
         mavenLocal()
         jcenter()
@@ -104,7 +102,44 @@ subprojects { project ->
         targetCompatibility = JavaVersion.VERSION_1_8
     }
 
-    if (!project.name.startsWith("sample")) {
+    if (isJvmOnly(project)) {
+        apply plugin: 'org.jetbrains.kotlin.platform.jvm'
+    } else {
+        apply plugin: 'org.jetbrains.kotlin.multiplatform'
+    }
+
+    kotlin {
+        if (!isInternal(project)) {
+            // explicitApi() TODO uncomment when upgrading kotlinpoet to 1.7.0
+        }
+        if (!isJvmOnly(project)) {
+            kotlin {
+                jvm()
+                js {
+                    browser {
+                    }
+                    nodejs {
+                    }
+                }
+                /* TODO enable native targets when KSP supports them
+                macosX64()
+                ios()
+                watchos()
+                tvos()
+                linuxX64()
+                linuxArm32Hfp()
+                linuxMips32()
+                androidNativeArm32()
+                androidNativeArm64()
+                mingwX64()
+                 */
+            }
+        }
+    }
+
+    apply plugin: 'maven-publish'
+
+    if (!isInternal(project)) {
         publishing {
             publications {
                 maven(MavenPublication) {
@@ -127,4 +162,13 @@ allprojects {
     ktlint {
         enableExperimentalRules = true
     }
+}
+
+static boolean isJvmOnly(project) {
+    return project.name.endsWith('codegen') || project.name.endsWith('processor') ||
+            project.name == 'integration-tests' // TODO this is only until we can use KSP in a multiplatform project
+}
+
+static boolean isInternal(project) {
+    return project.name.endsWith('tests')
 }
