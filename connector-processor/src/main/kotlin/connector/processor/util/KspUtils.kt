@@ -16,53 +16,53 @@ internal val KSClassDeclaration.isInterface get() = classKind == ClassKind.INTER
 internal val KSClassDeclaration.isTopLevel get() = parentDeclaration == null
 
 internal fun KSClassDeclaration.className(): ClassName {
-    val packageName = packageName.asString()
-    val simpleNames = qualifiedName!!.asString()
-        .removePrefix("$packageName.")
-        .split(".")
-        .toList()
+  val packageName = packageName.asString()
+  val simpleNames = qualifiedName!!.asString()
+    .removePrefix("$packageName.")
+    .split(".")
+    .toList()
 
-    return ClassName(packageName = packageName, simpleNames = simpleNames)
+  return ClassName(packageName = packageName, simpleNames = simpleNames)
 }
 
 internal fun KSType.className(): ClassName? {
-    val packageName = declaration.packageName.asString()
-    val simpleNames = declaration.qualifiedName?.asString()
-        ?.removePrefix("$packageName.")
-        ?.split(".")
-        ?.toList()
-        ?: return null
+  val packageName = declaration.packageName.asString()
+  val simpleNames = declaration.qualifiedName?.asString()
+    ?.removePrefix("$packageName.")
+    ?.split(".")
+    ?.toList()
+    ?: return null
 
-    val className = ClassName(packageName = packageName, simpleNames = simpleNames)
-    return if (nullability == Nullability.NULLABLE) {
-        className.copy(nullable = true) as ClassName
-    } else {
-        className
-    }
+  val className = ClassName(packageName = packageName, simpleNames = simpleNames)
+  return if (nullability == Nullability.NULLABLE) {
+    className.copy(nullable = true) as ClassName
+  } else {
+    className
+  }
 }
 
 internal fun KSType.typeName(
-    doOnTypeArgumentResolved: ((KSTypeArgument, KSType) -> Unit)? = null
+  doOnTypeArgumentResolved: ((KSTypeArgument, KSType) -> Unit)? = null
 ): TypeName? {
-    return if (arguments.isEmpty()) {
-        className()
-    } else {
-        className()
-            ?.parameterizedBy(
-                typeArguments = arguments.map { typeArgument ->
-                    typeArgument.type?.resolve()
-                        ?.also { type -> doOnTypeArgumentResolved?.invoke(typeArgument, type) }
-                        ?.typeName(doOnTypeArgumentResolved)
-                        ?: return null
-                }
-            )
-            ?.run {
-                val nullable = nullability == Nullability.NULLABLE
-                if (isNullable != nullable) {
-                    copy(nullable = nullable)
-                } else {
-                    this
-                }
-            }
-    }
+  return if (arguments.isEmpty()) {
+    className()
+  } else {
+    className()
+      ?.parameterizedBy(
+        typeArguments = arguments.map { typeArgument ->
+          typeArgument.type?.resolve()
+            ?.also { type -> doOnTypeArgumentResolved?.invoke(typeArgument, type) }
+            ?.typeName(doOnTypeArgumentResolved)
+            ?: return null
+        }
+      )
+      ?.run {
+        val nullable = nullability == Nullability.NULLABLE
+        if (isNullable != nullable) {
+          copy(nullable = nullable)
+        } else {
+          this
+        }
+      }
+  }
 }
