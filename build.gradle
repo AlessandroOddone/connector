@@ -109,9 +109,6 @@ subprojects { project ->
     }
 
     kotlin {
-        if (!isInternal(project)) {
-            // explicitApi() TODO uncomment when upgrading kotlinpoet to 1.7.0
-        }
         if (!isJvmOnly(project)) {
             kotlin {
                 jvm()
@@ -135,6 +132,8 @@ subprojects { project ->
                  */
             }
         }
+
+        // explicitApi() TODO uncomment when upgrading kotlinpoet to 1.7.0
     }
 
     apply plugin: 'maven-publish'

@@ -25,52 +25,7 @@ fun TestContext.assertHttpLogMatches(
         )
     }
     val errorsByIndex: List<List<String>> = logEntryMatchers.mapIndexed { index, matcher ->
-        var expectedUrl: String? = null
-        var expectedMethod: HttpMethod? = null
-        var expectedRequestHeaders: Headers? = null
-        matcher(
-            object : HttpLogEntry.MatcherBuilder {
-                override fun hasUrl(url: String) {
-                    expectedUrl = url
-                }
-
-                override fun hasUrl(url: Url) {
-                    expectedUrl = url.toString()
-                }
-
-                override fun hasMethod(method: HttpMethod) {
-                    expectedMethod = method
-                }
-
-                override fun hasMethod(method: String) {
-                    expectedMethod = HttpMethod(method)
-                }
-
-                override fun hasRequestHeaders(headers: Headers) {
-                    expectedRequestHeaders = headers
-                }
-            }
-        )
-        val errorMessages = mutableListOf<String>()
-        if (expectedUrl != null) {
-            val actualUrl = httpLog[index].url
-            if (actualUrl != expectedUrl) {
-                errorMessages.add("Expected URL '$expectedUrl', but was: '$actualUrl'")
-            }
-        }
-        if (expectedMethod != null) {
-            val actualMethod = httpLog[index].method
-            if (actualMethod != expectedMethod) {
-                errorMessages.add("Expected HTTP method ${expectedMethod!!.value}, but was: ${actualMethod.value}")
-            }
-        }
-        if (expectedRequestHeaders != null) {
-            val actualRequestHeaders = httpLog[index].requestHeaders
-            if (actualRequestHeaders != expectedRequestHeaders) {
-                errorMessages.add("Expected request headers ${expectedRequestHeaders!!.entries()}, but were: ${actualRequestHeaders.entries()}")
-            }
-        }
-        errorMessages
+        httpLog[index].collectErrorMessages(matcher)
     }
     var errorMessage = ""
     errorsByIndex.forEachIndexed { index, errors ->
@@ -86,4 +41,62 @@ fun TestContext.assertHttpLogMatches(
         errorMessage += "\nHTTP log: $httpLog\n"
         throw AssertionError(errorMessage)
     }
+}
+
+fun HttpLogEntry.assertMatches(matcher: HttpLogEntry.MatcherBuilder.() -> Unit) {
+    val errorMessages = collectErrorMessages(matcher)
+    if (errorMessages.isNotEmpty()) {
+        var errorMessage = "HTTP log entry was not as expected: $this\n"
+        errorMessage += errorMessages.joinToString(prefix = "- ", separator = "\n- ", postfix = "\n")
+        throw AssertionError(errorMessage)
+    }
+}
+
+private fun HttpLogEntry.collectErrorMessages(matcher: HttpLogEntry.MatcherBuilder.() -> Unit): List<String> {
+    var expectedUrl: String? = null
+    var expectedMethod: HttpMethod? = null
+    var expectedRequestHeaders: Headers? = null
+    matcher(
+        object : HttpLogEntry.MatcherBuilder {
+            override fun hasUrl(url: String) {
+                expectedUrl = url
+            }
+
+            override fun hasUrl(url: Url) {
+                expectedUrl = url.toString()
+            }
+
+            override fun hasMethod(method: HttpMethod) {
+                expectedMethod = method
+            }
+
+            override fun hasMethod(method: String) {
+                expectedMethod = HttpMethod(method)
+            }
+
+            override fun hasRequestHeaders(headers: Headers) {
+                expectedRequestHeaders = headers
+            }
+        }
+    )
+    val errorMessages = mutableListOf<String>()
+    if (expectedUrl != null) {
+        val actualUrl = url
+        if (actualUrl != expectedUrl) {
+            errorMessages.add("Expected URL '$expectedUrl', but was: '$actualUrl'")
+        }
+    }
+    if (expectedMethod != null) {
+        val actualMethod = method
+        if (actualMethod != expectedMethod) {
+            errorMessages.add("Expected HTTP method ${expectedMethod!!.value}, but was: ${actualMethod.value}")
+        }
+    }
+    if (expectedRequestHeaders != null) {
+        val actualRequestHeaders = requestHeaders
+        if (actualRequestHeaders != expectedRequestHeaders) {
+            errorMessages.add("Expected request headers ${expectedRequestHeaders!!.entries()}, but were: ${actualRequestHeaders.entries()}")
+        }
+    }
+    return errorMessages
 }

@@ -1,5 +1,8 @@
 package connector.codegen
 
+import com.squareup.kotlinpoet.ANY
+import com.squareup.kotlinpoet.AnnotationSpec
+import com.squareup.kotlinpoet.BOOLEAN
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FileSpec
@@ -17,56 +20,60 @@ import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.UNIT
 import com.squareup.kotlinpoet.asClassName
 import com.squareup.kotlinpoet.buildCodeBlock
+import connector.codegen.util.escape
+import connector.codegen.util.noBreakingSpaces
 import connector.codegen.util.nonNull
 import connector.http.HttpBodySerializer
 import io.ktor.client.HttpClient
-import io.ktor.client.features.ClientRequestException
-import io.ktor.client.features.RedirectResponseException
-import io.ktor.client.features.ResponseException
-import io.ktor.client.features.ServerResponseException
 import io.ktor.http.ContentType
 import io.ktor.http.HeaderValueParam
+import io.ktor.http.URLBuilder
+import io.ktor.http.URLProtocol
 import io.ktor.http.Url
 
-fun Service.toFileSpec(): FileSpec {
-    requireNotNull(existingParentInterface)
+fun ServiceDescription.toFileSpec(): FileSpec {
     val implementationClassName = "ConnectorGenerated$name"
     return FileSpec
         .builder(
-            packageName = existingParentInterface.packageName,
+            packageName = parentInterface.packageName,
             fileName = name
         )
         .addFunction(
             factoryFunctionSpec(
                 implementationClassName = implementationClassName,
-                parentInterface = existingParentInterface
+                parentInterface = parentInterface
             )
         )
         .addType(
             implementationClassSpec(
                 name = implementationClassName,
-                parentInterface = existingParentInterface
+                parentInterface = parentInterface
             )
         )
+        .addFunction(ensureValidBaseUrlFunctionSpec())
+        .addFunction(dynamicUrlFunctionSpec())
+        .addFunction(isFullUrlFunctionSpec())
+        .addFunction(ensureNoPathTraversalFunctionSpec())
+        .addFunction(isPathTraversalSegmentFunctionSpec())
         .build()
 }
 
-private fun Service.factoryFunctionSpec(
+private fun ServiceDescription.factoryFunctionSpec(
     implementationClassName: String,
     parentInterface: ClassName
 ): FunSpec {
     val baseUrlParameter = ParameterSpec
-        .builder(ParameterNames.BASE_URL, Url::class)
+        .builder(ParameterNames.BASE_URL, ClassNames.URL)
         .build()
 
     val httpClientParameter = ParameterSpec
-        .builder(ParameterNames.HTTP_CLIENT, HttpClient::class)
+        .builder(ParameterNames.HTTP_CLIENT, ClassNames.HTTP_CLIENT)
         .build()
 
     val httpBodySerializersParameter = ParameterSpec
         .builder(
             ParameterNames.HTTP_BODY_SERIALIZERS,
-            ITERABLE.plusParameter(HttpBodySerializer::class.asClassName())
+            ITERABLE.plusParameter(ClassNames.HTTP_BODY_SERIALIZER)
         )
         .build()
 
@@ -75,14 +82,21 @@ private fun Service.factoryFunctionSpec(
         .addParameter(httpClientParameter)
         .addParameter(httpBodySerializersParameter)
         .returns(parentInterface)
-        .addStatement(
-            "return $implementationClassName(" +
-                "${ParameterNames.BASE_URL}, ${ParameterNames.HTTP_CLIENT}, ${ParameterNames.HTTP_BODY_SERIALIZERS})"
+        .addCode(
+            buildCodeBlock {
+                addStatement("%L.%L()", ParameterNames.BASE_URL, FunctionNames.ENSURE_VALID_BASE_URL)
+                addStatement(
+                    "return $implementationClassName(%L, %L, %L)",
+                    ParameterNames.BASE_URL,
+                    ParameterNames.HTTP_CLIENT,
+                    ParameterNames.HTTP_BODY_SERIALIZERS
+                )
+            }
         )
         .build()
 }
 
-private fun Service.implementationClassSpec(
+private fun ServiceDescription.implementationClassSpec(
     name: String,
     parentInterface: ClassName
 ): TypeSpec {
@@ -91,23 +105,23 @@ private fun Service.implementationClassSpec(
         .addSuperinterface(parentInterface)
         .primaryConstructor(
             FunSpec.constructorBuilder()
-                .addParameter(ParameterNames.BASE_URL, Url::class)
-                .addParameter(ParameterNames.HTTP_CLIENT, HttpClient::class)
+                .addParameter(ParameterNames.BASE_URL, ClassNames.URL)
+                .addParameter(ParameterNames.HTTP_CLIENT, ClassNames.HTTP_CLIENT)
                 .addParameter(
                     ParameterNames.HTTP_BODY_SERIALIZERS,
-                    ITERABLE.plusParameter(HttpBodySerializer::class.asClassName())
+                    ITERABLE.plusParameter(ClassNames.HTTP_BODY_SERIALIZER)
                 )
                 .build()
         )
         .addProperty(
             PropertySpec
-                .builder(ParameterNames.BASE_URL, Url::class, KModifier.PRIVATE)
+                .builder(ParameterNames.BASE_URL, ClassNames.URL, KModifier.PRIVATE)
                 .initializer(ParameterNames.BASE_URL)
                 .build()
         )
         .addProperty(
             PropertySpec
-                .builder(ParameterNames.HTTP_CLIENT, HttpClient::class, KModifier.PRIVATE)
+                .builder(ParameterNames.HTTP_CLIENT, ClassNames.HTTP_CLIENT, KModifier.PRIVATE)
                 .initializer(ParameterNames.HTTP_CLIENT)
                 .build()
         )
@@ -115,7 +129,7 @@ private fun Service.implementationClassSpec(
             PropertySpec
                 .builder(
                     ParameterNames.HTTP_BODY_SERIALIZERS,
-                    ITERABLE.plusParameter(HttpBodySerializer::class.asClassName()),
+                    ITERABLE.plusParameter(ClassNames.HTTP_BODY_SERIALIZER),
                     KModifier.PRIVATE
                 )
                 .initializer(ParameterNames.HTTP_BODY_SERIALIZERS)
@@ -123,32 +137,28 @@ private fun Service.implementationClassSpec(
         )
         .apply {
             functions.forEach { serviceFunction ->
-                serviceFunction as Service.Function.Http
+                serviceFunction as ServiceDescription.Function.Http
                 addFunction(serviceFunction.toFunSpec(parentClassName = name))
             }
         }
         .build()
 }
 
-private fun Service.Function.Http.toFunSpec(parentClassName: String): FunSpec {
+private fun ServiceDescription.Function.Http.toFunSpec(parentClassName: String): FunSpec {
     return FunSpec.builder(name)
         .addModifiers(KModifier.OVERRIDE, KModifier.SUSPEND)
         .addParameters(parameters())
         .addCode(body(parentClassName = parentClassName))
-        .apply {
-            if (returnType != UNIT) {
-                returns(returnType)
-            }
-        }
+        .returns(returnType)
         .build()
 }
 
-private fun Service.Function.Http.parameters(): List<ParameterSpec> =
+private fun ServiceDescription.Function.Http.parameters(): List<ParameterSpec> =
     parameters.map { (parameterName, parameterType) ->
         ParameterSpec(name = parameterName, type = parameterType)
     }
 
-private fun Service.Function.Http.body(parentClassName: String): CodeBlock {
+private fun ServiceDescription.Function.Http.body(parentClassName: String): CodeBlock {
     fun classProperty(name: String, isNestedThis: Boolean = false): String = when {
         !parameters.containsKey(name) -> name
         isNestedThis -> "this@$parentClassName.$name"
@@ -161,77 +171,217 @@ private fun Service.Function.Http.body(parentClassName: String): CodeBlock {
         return variableName
     }
 
-    fun CodeBlock.Builder.setMethod() {
+    fun validateDynamicPathParameters() = buildCodeBlock {
+        if (url !is ServiceDescription.Url.Template) return@buildCodeBlock
+        val segments = url.value.split('/')
+        val toValidate = segments
+            .mapNotNull { segment ->
+                var surroundWithQuotes = false
+                var didReplace = false
+                var result = segment
+                url.parameterNameReplacementMappings.forEach { (toReplace, parameterName) ->
+                    when {
+                        segment == toReplace -> {
+                            if (!didReplace) {
+                                result = result.escape().noBreakingSpaces()
+                            }
+                            didReplace = true
+                            result = result.replace(toReplace, parameterName)
+                        }
+                        segment.contains(toReplace) -> {
+                            if (!didReplace) {
+                                result = result.escape().noBreakingSpaces()
+                            }
+                            didReplace = true
+                            surroundWithQuotes = true
+                            result = result.replace(toReplace, "\${$parameterName}")
+                        }
+                    }
+                }
+                if (!didReplace) return@mapNotNull null
+                if (surroundWithQuotes) "\"$result\"" else result
+            }
+            .toSet()
+
+        toValidate.forEach { addStatement("%L.${FunctionNames.ENSURE_NO_PATH_TRAVERSAL}()", it) }
+    }
+
+    fun setMethod() = buildCodeBlock {
         val thisOrEmpty = if (parameters.containsKey("method")) "this." else ""
         addStatement(
-            "${thisOrEmpty}method = " + when (method) {
-                HttpMethod.DELETE -> "%T.Delete"
-                HttpMethod.GET -> "%T.Get"
-                HttpMethod.HEAD -> "%T.Head"
-                HttpMethod.OPTIONS -> "%T.Options"
-                HttpMethod.PATCH -> "%T.Patch"
-                HttpMethod.POST -> "%T.Post"
-                HttpMethod.PUT -> "%T.Put"
+            "${thisOrEmpty}method = " + when {
+                method.equals("DELETE", ignoreCase = true) -> "%T.Delete"
+                method.equals("GET", ignoreCase = true) -> "%T.Get"
+                method.equals("HEAD", ignoreCase = true) -> "%T.Head"
+                method.equals("OPTIONS", ignoreCase = true) -> "%T.Options"
+                method.equals("PATCH", ignoreCase = true) -> "%T.Patch"
+                method.equals("POST", ignoreCase = true) -> "%T.Post"
+                method.equals("PUT", ignoreCase = true) -> "%T.Put"
+                else -> "%T(\"$method\")"
             },
             io.ktor.http.HttpMethod::class
         )
     }
 
-    fun CodeBlock.Builder.setUrl() {
-        // TODO don't prefix baseUrl if full URL is provided
-        val urlStringTemplate = "\${${classProperty(ParameterNames.BASE_URL, isNestedThis = true)}}" +
-            when (relativeUrl) {
-                is RelativeUrl.Parameter -> relativeUrl.name
-                is RelativeUrl.Template -> {
-                    buildString {
-                        append(
-                            relativeUrl.path.joinToString(separator = "/") { value ->
-                                when (value) {
-                                    is Static -> value.content
-                                    is Dynamic -> "$${value.parameterName}"
-                                }
-                            }
+    fun setUrl() = buildCodeBlock {
+        beginControlFlow("url")
+
+        when (url) {
+            is ServiceDescription.Url.Template -> {
+                val urlStringTemplate = url.value.let { urlTemplate ->
+                    var result = urlTemplate.escape().noBreakingSpaces()
+                    url.parameterNameReplacementMappings.forEach { (toReplace, parameterName) ->
+                        result = result.replace(toReplace, "\${$parameterName}")
+                    }
+                    result
+                }
+                val path = urlStringTemplate.takeWhile { it != '?' && it != '#' }
+
+                when (url.type) {
+                    UrlType.ABSOLUTE -> {
+                        addStatement(
+                            "%M(%L)",
+                            MemberName("io.ktor.http", "takeFrom"),
+                            classProperty(ParameterNames.BASE_URL, isNestedThis = true),
                         )
-                        if (relativeUrl.queryParameters.isNotEmpty()) {
-                            append('?')
+                        addStatement(
+                            "encodedPath·= %L.%M()",
+                            "\"$path\"",
+                            MemberName("io.ktor.http", "encodeURLPath")
+                        )
+                    }
+
+                    UrlType.FULL -> {
+                        addStatement(
+                            "%M(%L)",
+                            MemberName("io.ktor.http", "takeFrom"),
+                            "\"$path\"",
+                        )
+                    }
+
+                    UrlType.PROTOCOL_RELATIVE -> {
+                        addStatement(
+                            "%M(\"%L:%L\")",
+                            MemberName("io.ktor.http", "takeFrom"),
+                            "\${${classProperty(ParameterNames.BASE_URL, isNestedThis = true)}.protocol.name}",
+                            path,
+                        )
+                    }
+
+                    UrlType.RELATIVE -> {
+                        addStatement(
+                            "%M(%L)",
+                            MemberName("io.ktor.http", "takeFrom"),
+                            classProperty(ParameterNames.BASE_URL, isNestedThis = true),
+                        )
+                        addStatement(
+                            "encodedPath·+= %L.%M()",
+                            "\"$path\"",
+                            MemberName("io.ktor.http", "encodeURLPath")
+                        )
+                    }
+                }
+
+                if (urlStringTemplate.length > path.length) {
+                    val afterPath = urlStringTemplate.substring(path.length)
+                    // 'null' if there is no '?'
+                    val queryString: String? = if (afterPath[0] == '?') {
+                        afterPath.drop(1).takeWhile { it != '#' }
+                    } else {
+                        null
+                    }
+                    // 'null' if there is no '#'
+                    val fragment: String? = if (afterPath[0] == '#') {
+                        afterPath.drop(1)
+                    } else {
+                        val indexOfHash = afterPath.indexOf('#')
+                        when {
+                            indexOfHash < 0 -> null
+                            indexOfHash == afterPath.lastIndex -> ""
+                            else -> afterPath.substring(indexOfHash + 1)
                         }
-                        append(
-                            relativeUrl.queryParameters.entries.joinToString(separator = "&") { (name, value) ->
-                                "$name=" + when (value) {
-                                    is Static -> value.content
-                                    is Dynamic -> "$${value.parameterName}"
-                                }
-                            }
+                    }
+
+                    if (queryString?.isEmpty() == true) {
+                        addStatement("trailingQuery = true")
+                    }
+
+                    if (queryString?.isNotEmpty() == true) {
+                        addStatement(
+                            "parameters.appendAll(%M(%S))",
+                            MemberName("io.ktor.http", "parseQueryString"),
+                            queryString
                         )
+                    }
+
+                    if (fragment?.isNotEmpty() == true) {
+                        addStatement("fragment·= %L", "\"$fragment\"")
                     }
                 }
             }
 
-        addStatement(
-            "%M(%L)",
-            MemberName("io.ktor.client.request", "url"),
-            "\"$urlStringTemplate\""
-        )
+            is ServiceDescription.Url.Dynamic -> {
+                when (val typeName = parameters.getValue(url.parameterName)) {
+                    ClassNames.URL -> {
+                        addStatement(
+                            "%M(%L)",
+                            MemberName("io.ktor.http", "takeFrom"),
+                            url.parameterName,
+                        )
+                    }
+
+                    else -> {
+                        addStatement(
+                            "%L(%L%L, %L)",
+                            FunctionNames.DYNAMIC_URL,
+                            url.parameterName,
+                            if (typeName != STRING) ".toString()" else "",
+                            classProperty(ParameterNames.BASE_URL, isNestedThis = true)
+                        )
+                    }
+                }
+            }
+        }
+        url.dynamicQueryParameters.forEach { (queryParameterName, functionParameterName) ->
+            val typeName = parameters.getValue(functionParameterName)
+            if (typeName.isNullable) {
+                beginControlFlow("if (%L·!= null)", functionParameterName)
+            }
+            addStatement(
+                "parameters.append(%S, %L)",
+                queryParameterName,
+                if (typeName.nonNull() == STRING) {
+                    functionParameterName
+                } else {
+                    "$functionParameterName.toString()"
+                }
+            )
+            if (typeName.isNullable) {
+                endControlFlow()
+            }
+        }
+
+        endControlFlow()
     }
 
-    fun CodeBlock.Builder.setHeaders() {
+    fun setHeaders() = buildCodeBlock {
         if (headers.isNotEmpty()) {
             add("%M·{\n", MemberName(packageName = "io.ktor.client.request", "headers"))
             indent()
-            for ((name, stringValue) in headers) {
-                if (stringValue is Static) {
-                    addStatement("append(%S, %S)", name, stringValue.content)
+            for (header in headers) {
+                if (header is StringValue.Static) {
+                    addStatement("append(%S, %S)", header.name, header.value)
                     continue
                 }
-                stringValue as Dynamic
-                val typeName = parameters.getValue(stringValue.parameterName)
+                header as StringValue.Dynamic
+                val typeName = parameters.getValue(header.parameterName)
                 if (typeName.isNullable) {
-                    beginControlFlow("if (${stringValue.parameterName} != null)")
+                    beginControlFlow("if (${header.parameterName}·!= null)")
                 }
-                if (typeName == STRING) {
-                    addStatement("append(%S, ${stringValue.parameterName})", name)
+                if (typeName.nonNull() == STRING) {
+                    addStatement("append(%S, ${header.parameterName})", header.name)
                 } else {
-                    addStatement("append(%S, ${stringValue.parameterName}.toString())", name)
+                    addStatement("append(%S, ${header.parameterName}.toString())", header.name)
                 }
                 if (typeName.isNullable) {
                     endControlFlow()
@@ -242,11 +392,11 @@ private fun Service.Function.Http.body(parentClassName: String): CodeBlock {
         }
     }
 
-    fun CodeBlock.Builder.setBody() {
+    fun setBody() = buildCodeBlock {
         if (requestBody != null) {
             val typeName = parameters.getValue(requestBody.parameterName)
             if (typeName.isNullable) {
-                beginControlFlow("if (${requestBody.parameterName} != null)")
+                beginControlFlow("if (${requestBody.parameterName}·!= null)")
             }
 
             val contentTypeVariableName = variableName("requestContentType")
@@ -320,28 +470,9 @@ private fun Service.Function.Http.body(parentClassName: String): CodeBlock {
         }
     }
 
-    fun CodeBlock.Builder.returnResponseBody(httpResponseVariableName: String) {
-        beginControlFlow("when ($httpResponseVariableName.status.value)")
-        addStatement(
-            "in 300..399 -> throw %T($httpResponseVariableName)",
-            RedirectResponseException::class.asClassName()
-        )
-        addStatement(
-            "in 400..499 -> throw %T($httpResponseVariableName)",
-            ClientRequestException::class.asClassName()
-        )
-        addStatement(
-            "in 500..599 -> throw %T($httpResponseVariableName)",
-            ServerResponseException::class.asClassName()
-        )
-        addStatement(
-            "!in 200..299 -> throw %T($httpResponseVariableName)",
-            ResponseException::class.asClassName()
-        )
-        endControlFlow()
-
+    fun returnResponseBody(httpResponseVariableName: String) = buildCodeBlock {
         if (returnType.isNullable) {
-            beginControlFlow("if ($httpResponseVariableName.content.availableForRead == 0)")
+            beginControlFlow("if ($httpResponseVariableName.content.availableForRead·==·0)")
             addStatement("return null")
             endControlFlow()
         }
@@ -362,7 +493,7 @@ private fun Service.Function.Http.body(parentClassName: String): CodeBlock {
         unindent()
         add("}\n")
 
-        beginControlFlow("if ($serializerVariableName == null)")
+        beginControlFlow("if ($serializerVariableName·==·null)")
         addStatement(
             "%M(%L)",
             MemberName("kotlin", "error"),
@@ -382,6 +513,8 @@ private fun Service.Function.Http.body(parentClassName: String): CodeBlock {
     }
 
     return buildCodeBlock {
+        add(validateDynamicPathParameters())
+
         val httpResponseVariableName = variableName("httpResponse")
         val returnsUnit = returnType.nonNull() == UNIT
         if (!returnsUnit) {
@@ -394,16 +527,16 @@ private fun Service.Function.Http.body(parentClassName: String): CodeBlock {
         )
         indent()
 
-        setMethod()
-        setUrl()
-        setHeaders()
-        setBody()
+        add(setMethod())
+        add(setUrl())
+        add(setHeaders())
+        add(setBody())
 
         unindent()
         add("}\n")
 
         if (!returnsUnit) {
-            returnResponseBody(httpResponseVariableName = httpResponseVariableName)
+            add(returnResponseBody(httpResponseVariableName = httpResponseVariableName))
         } else if (returnType.isNullable) {
             addStatement("return %T", UNIT)
         }
@@ -470,8 +603,295 @@ private fun obtainSerializerFor(typeName: TypeName): CodeBlock = buildCodeBlock 
     }
 }
 
+private fun ensureValidBaseUrlFunctionSpec(): FunSpec {
+    return FunSpec.builder(FunctionNames.ENSURE_VALID_BASE_URL)
+        .addAnnotation(suppressNothingToInlineAnnotationSpec)
+        .addModifiers(KModifier.PRIVATE, KModifier.INLINE)
+        .receiver(ClassNames.URL)
+        .addCode(
+            buildCodeBlock {
+                beginControlFlow(
+                    "if (protocol·!= %T.HTTP && protocol·!= %T.HTTPS)",
+                    URLProtocol::class,
+                    URLProtocol::class
+                )
+                addStatement(
+                    "throw %T(%L)",
+                    IllegalArgumentException::class,
+                    "\"Base·URL·protocol·must·be·HTTP·or·HTTPS.·Found:·\$this\""
+                )
+                endControlFlow()
+
+                beginControlFlow("if (!parameters.isEmpty())")
+                addStatement(
+                    "throw %T(%L)",
+                    IllegalArgumentException::class,
+                    "\"Base·URL·should·not·have·query·parameters.·Found:·\$this\""
+                )
+                endControlFlow()
+
+                beginControlFlow(
+                    "if (fragment.%M())",
+                    MemberName("kotlin.text", "isNotEmpty")
+                )
+                addStatement(
+                    "throw %T(%L)",
+                    IllegalArgumentException::class,
+                    "\"Base·URL·fragment·should·be·empty.·Found:·\$this\""
+                )
+                endControlFlow()
+
+                beginControlFlow(
+                    "if (!%M.%M(%L))",
+                    MemberName("io.ktor.http", "fullPath"),
+                    MemberName("kotlin.text", "endsWith"),
+                    "'/'"
+                )
+                addStatement(
+                    "throw %T(%L)",
+                    IllegalArgumentException::class,
+                    "\"Base·URL·should·end·in·'/'.·Found:·\$this\""
+                )
+                endControlFlow()
+            }
+        )
+        .build()
+}
+
+private fun dynamicUrlFunctionSpec(): FunSpec {
+    return FunSpec.builder(FunctionNames.DYNAMIC_URL)
+        .addAnnotation(suppressNothingToInlineAnnotationSpec)
+        .addModifiers(KModifier.PRIVATE, KModifier.INLINE)
+        .receiver(ClassNames.URL_BUILDER)
+        .addParameter(ParameterNames.DYNAMIC_URL, STRING)
+        .addParameter(ParameterNames.BASE_URL, ClassNames.URL)
+        .returns(ClassNames.URL_BUILDER)
+        .addCode(
+            buildCodeBlock {
+                addStatement(
+                    "val path = %L.%M·{ it·!=·'?'·&& it·!=·'#' }",
+                    ParameterNames.DYNAMIC_URL,
+                    MemberName("kotlin.text", "takeWhile"),
+                )
+
+                beginControlFlow("when")
+
+                // Protocol-relative
+                beginControlFlow(
+                    "path.%M(%S) ->",
+                    MemberName("kotlin.text", "startsWith"),
+                    "//",
+                )
+                addStatement(
+                    "%M(\"%L:%L\")",
+                    MemberName("io.ktor.http", "takeFrom"),
+                    "\${${ParameterNames.BASE_URL}.protocol.name}",
+                    "\$path",
+                )
+                endControlFlow()
+
+                // Absolute
+                beginControlFlow(
+                    "path.%M(%S) ->",
+                    MemberName("kotlin.text", "startsWith"),
+                    "/",
+                )
+                addStatement(
+                    "%M(%L)",
+                    MemberName("io.ktor.http", "takeFrom"),
+                    ParameterNames.BASE_URL,
+                )
+                addStatement(
+                    "encodedPath·= path.%M()",
+                    MemberName("io.ktor.http", "encodeURLPath")
+                )
+                endControlFlow()
+
+                // Full
+                beginControlFlow("path.${FunctionNames.IS_FULL_URL}() ->")
+                addStatement(
+                    "%M(path)",
+                    MemberName("io.ktor.http", "takeFrom"),
+                )
+                endControlFlow()
+
+                // Relative
+                beginControlFlow("else ->")
+                addStatement(
+                    "%M(%L)",
+                    MemberName("io.ktor.http", "takeFrom"),
+                    ParameterNames.BASE_URL,
+                )
+                addStatement(
+                    "encodedPath·+= path.%M()",
+                    MemberName("io.ktor.http", "encodeURLPath")
+                )
+                endControlFlow()
+
+                endControlFlow()
+
+                beginControlFlow("if (${ParameterNames.DYNAMIC_URL}.length > path.length)")
+                addStatement(
+                    "val afterPath = ${ParameterNames.DYNAMIC_URL}.%M(path.length)",
+                    MemberName("kotlin.text", "substring"),
+                )
+                add(
+                    """
+                    // 'null' if there is no '?'
+                    val queryString: String? = if (afterPath[0] == '?') {
+                      afterPath.%M(1).%M { it != '#' }
+                    } else {
+                      null
+                    }
+                    if (queryString?.%M() == true) {
+                      trailingQuery = true
+                    }
+                    if (queryString?.%M() == true) {
+                      parameters.appendAll(%M(queryString))
+                    }
+                    """.trimIndent(),
+                    MemberName("kotlin.text", "drop"),
+                    MemberName("kotlin.text", "takeWhile"),
+                    MemberName("kotlin.text", "isEmpty"),
+                    MemberName("kotlin.text", "isNotEmpty"),
+                    MemberName("io.ktor.http", "parseQueryString"),
+                )
+                add("\n")
+                add(
+                    """
+                    fragment = if (afterPath[0] == '#') {
+                      afterPath.%M(1)
+                    } else {
+                      afterPath.%M("#", missingDelimiterValue = "")
+                    }
+                    """.trimIndent(),
+                    MemberName("kotlin.text", "drop"),
+                    MemberName("kotlin.text", "substringAfter"),
+                )
+                add("\n")
+                endControlFlow()
+
+                addStatement("return this")
+            }
+        )
+        .build()
+}
+
+private fun isFullUrlFunctionSpec(): FunSpec {
+    return FunSpec.builder(FunctionNames.IS_FULL_URL)
+        .addAnnotation(suppressNothingToInlineAnnotationSpec)
+        .addModifiers(KModifier.PRIVATE, KModifier.INLINE)
+        .receiver(STRING)
+        .returns(BOOLEAN)
+        .addCode(
+            """
+            for (index in %M) {
+              val char = get(index)
+              return if (index == 0 && char !in 'a'..'z' && char !in 'A'..'Z') {
+                  false
+              } else when (char) {
+                  ':' -> true
+                  in 'a'..'z', in 'A'..'Z', in '0'..'9', '+', '-', '.' -> continue
+                  else -> false
+              }
+            }
+            return false
+            """.trimIndent(),
+            MemberName("kotlin.text", "indices")
+        )
+        .build()
+}
+
+private fun ensureNoPathTraversalFunctionSpec(): FunSpec {
+    return FunSpec.builder(FunctionNames.ENSURE_NO_PATH_TRAVERSAL)
+        .addAnnotation(suppressNothingToInlineAnnotationSpec)
+        .addModifiers(KModifier.PRIVATE, KModifier.INLINE)
+        .receiver(ANY.copy(nullable = true))
+        .addCode(
+            buildCodeBlock {
+                addStatement("if (this·==·null) return")
+                beginControlFlow(
+                    "if (toString().%M('/').%M·{ it.isPathTraversalSegment() })",
+                    MemberName("kotlin.text", "split"),
+                    MemberName("kotlin.collections", "any")
+                )
+                addStatement(
+                    "throw·%T(%L)",
+                    IllegalArgumentException::class,
+                    "\"@Path·arguments·cannot·introduce·path·traversal.·Found:·'\$this'\""
+                )
+                endControlFlow()
+            }
+        )
+        .build()
+}
+
+private fun isPathTraversalSegmentFunctionSpec(): FunSpec {
+    return FunSpec.builder(FunctionNames.IS_PATH_TRAVERSAL_SEGMENT)
+        .addAnnotation(suppressNothingToInlineAnnotationSpec)
+        .addModifiers(KModifier.PRIVATE, KModifier.INLINE)
+        .receiver(STRING)
+        .returns(BOOLEAN)
+        .addCode(
+            buildCodeBlock {
+                val startsWithMemberName = MemberName("kotlin.text", "startsWith")
+                val endsWithMemberName = MemberName("kotlin.text", "endsWith")
+
+                beginControlFlow("return when")
+
+                beginControlFlow("%M('.') ->", startsWithMemberName)
+                addStatement(
+                    "length·==·1·|| length·==·2·&&·%M('.')·|| length·==·4·&&·%M(%S, ignoreCase·=·true)",
+                    endsWithMemberName,
+                    endsWithMemberName,
+                    "%2E",
+                )
+                endControlFlow()
+
+                beginControlFlow(
+                    "%M(%S, ignoreCase·=·true) ->",
+                    startsWithMemberName,
+                    "%2E",
+                )
+                addStatement(
+                    "length·==·3·|| length·==·4·&&·%M('.')·|| length·==·6·&&·%M(%S, ignoreCase·=·true)",
+                    endsWithMemberName,
+                    endsWithMemberName,
+                    "%2E",
+                )
+                endControlFlow()
+
+                addStatement("else -> false")
+
+                endControlFlow()
+            }
+        )
+        .build()
+}
+
+private val suppressNothingToInlineAnnotationSpec = AnnotationSpec
+    .builder(Suppress::class)
+    .addMember("%S", "NOTHING_TO_INLINE")
+    .build()
+
+private object ClassNames {
+    val HTTP_BODY_SERIALIZER = HttpBodySerializer::class.asClassName()
+    val HTTP_CLIENT = HttpClient::class.asClassName()
+    val URL = Url::class.asClassName()
+    val URL_BUILDER = URLBuilder::class.asClassName()
+}
+
 private object ParameterNames {
     const val BASE_URL = "baseUrl"
+    const val DYNAMIC_URL = "dynamicUrl"
     const val HTTP_CLIENT = "httpClient"
     const val HTTP_BODY_SERIALIZERS = "httpBodySerializers"
+}
+
+private object FunctionNames {
+    const val DYNAMIC_URL = "dynamicUrl"
+    const val ENSURE_NO_PATH_TRAVERSAL = "ensureNoPathTraversal"
+    const val ENSURE_VALID_BASE_URL = "ensureValidBaseUrl"
+    const val IS_FULL_URL = "isFullUrl"
+    const val IS_PATH_TRAVERSAL_SEGMENT = "isPathTraversalSegment"
 }

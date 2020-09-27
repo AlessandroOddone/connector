@@ -1,6 +1,12 @@
-package connector.http
+package connector
 
-import connector.Service
+import connector.http.DELETE
+import connector.http.GET
+import connector.http.HEAD
+import connector.http.OPTIONS
+import connector.http.PATCH
+import connector.http.POST
+import connector.http.PUT
 import connector.util.assertHttpLogMatches
 import connector.util.runTest
 import io.ktor.http.HttpMethod

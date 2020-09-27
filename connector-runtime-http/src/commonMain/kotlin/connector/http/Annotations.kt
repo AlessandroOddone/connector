@@ -35,9 +35,6 @@ annotation class Path(val name: String)
 @Target(AnnotationTarget.VALUE_PARAMETER)
 annotation class Query(val name: String)
 
-@Target(AnnotationTarget.VALUE_PARAMETER)
-annotation class Url
-
 /**
  * Headers
  */

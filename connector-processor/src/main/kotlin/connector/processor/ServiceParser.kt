@@ -1,16 +1,13 @@
 package connector.processor
 
 import com.squareup.kotlinpoet.TypeName
-import connector.codegen.Dynamic
-import connector.codegen.HttpMethod
-import connector.codegen.RelativeUrl
-import connector.codegen.Service
-import connector.codegen.Static
+import connector.codegen.ServiceDescription
 import connector.codegen.StringValue
+import connector.codegen.UrlType
 import connector.processor.util.className
 import connector.processor.util.isInterface
 import connector.processor.util.isTopLevel
-import connector.processor.util.qualifier
+import connector.processor.util.packageName
 import connector.processor.util.typeName
 import io.ktor.http.BadContentTypeFormatException
 import io.ktor.http.ContentType
@@ -25,9 +22,10 @@ import org.jetbrains.kotlin.ksp.symbol.KSPropertyDeclaration
 import org.jetbrains.kotlin.ksp.symbol.KSType
 import org.jetbrains.kotlin.ksp.symbol.KSVariableParameter
 import org.jetbrains.kotlin.ksp.symbol.Modifier
+import org.jetbrains.kotlin.ksp.symbol.Nullability
 
 class ServiceParser(private val logger: KSPLogger) {
-    fun parse(classDeclaration: KSClassDeclaration): Service = with(classDeclaration) {
+    fun parse(classDeclaration: KSClassDeclaration): ServiceDescription = with(classDeclaration) {
         if (!isInterface || !isTopLevel) {
             logger.error("@Service target must be a top-level interface.", classDeclaration)
         }
@@ -49,14 +47,14 @@ class ServiceParser(private val logger: KSPLogger) {
                 (declaration as? KSFunctionDeclaration)?.parseServiceFunction()
             }
 
-        return Service(
+        return ServiceDescription(
             name = serviceName,
             functions = serviceFunctions,
-            existingParentInterface = className()
+            parentInterface = className()
         )
     }
 
-    private fun KSFunctionDeclaration.parseServiceFunction(): Service.Function? {
+    private fun KSFunctionDeclaration.parseServiceFunction(): ServiceDescription.Function? {
         val httpMethodAnnotations = findHttpMethodAnnotations()
         if (httpMethodAnnotations.isEmpty()) {
             logger.error("All functions in @Service interfaces must be annotated with an HTTP method.", this)
@@ -105,7 +103,7 @@ class ServiceParser(private val logger: KSPLogger) {
                 }
             }
             httpMethodAnnotations.forEach { httpMethodAnnotation ->
-                if (!httpMethodAnnotation.method.allowsBody) {
+                if (!httpMethodAnnotation.isBodyAllowed) {
                     logger.error(
                         "@Body is not allowed in ${httpMethodAnnotation.method} requests.",
                         bodyAnnotation.annotation
@@ -116,92 +114,142 @@ class ServiceParser(private val logger: KSPLogger) {
 
         val urlAnnotations = allParameterAnnotations.filterIsInstance<HttpParameterAnnotation.Url>()
         if (urlAnnotations.size > 1) {
-            logger.error("Multiple @Url parameters are not allowed.", this)
+            logger.error("Multiple @URL parameters are not allowed.", this)
         }
         httpMethodAnnotations.forEach { httpMethodAnnotation ->
-            if (httpMethodAnnotation.relativePath == null && urlAnnotations.isEmpty()) {
+            if (httpMethodAnnotation.urlTemplate == null && urlAnnotations.isEmpty()) {
                 logger.error("URL must be provided either by @${httpMethodAnnotation.method} or via @Url.", this)
             }
-            if (httpMethodAnnotation.relativePath != null && urlAnnotations.isNotEmpty()) {
+            if (httpMethodAnnotation.urlTemplate != null && urlAnnotations.isNotEmpty()) {
                 logger.error("URL cannot be provided by both @${httpMethodAnnotation.method} and @Url.", this)
             }
         }
 
-        val pathAnnotations = allParameterAnnotations.filterIsInstance<HttpParameterAnnotation.Path>()
-        httpMethodAnnotations.forEach { httpMethodAnnotation ->
-            val expectedPathParameterNames: MutableSet<String> =
-                httpMethodAnnotation.relativePath
-                    ?.asSequence()
-                    ?.filterIsInstance<Dynamic>()
-                    ?.map { it.parameterName }
-                    .orEmpty()
-                    .toMutableSet()
+        val pathAnnotationsByName = allParameterAnnotations
+            .filterIsInstance<HttpParameterAnnotation.Path>()
+            .groupBy { it.name }
 
-            pathAnnotations.groupBy { it.name }.forEach { (name, occurrences) ->
-                if (occurrences.size > 1) {
-                    logger.error(
-                        "@Path '$name' is defined ${occurrences.size} times, but at most once is allowed.",
-                        this
-                    )
-                }
-                if (!expectedPathParameterNames.contains(name)) {
-                    occurrences.forEach { pathAnnotation ->
+        httpMethodAnnotations.forEach { httpMethodAnnotation ->
+            val urlTemplate = httpMethodAnnotation.urlTemplate
+            val urlTemplateParameters = urlTemplate?.let { URL_TEMPLATE_PARAMETER_REGEX.findAll(it) }
+
+            if (urlTemplate != null) {
+                urlTemplateParameters!!
+                val questionMarkIndex = urlTemplate.indexOf('?')
+                if (questionMarkIndex >= 0) {
+                    val dynamicQueryParameters = urlTemplateParameters
+                        .filter { it.range.first > questionMarkIndex }
+                        .toList()
+
+                    if (dynamicQueryParameters.isNotEmpty()) {
                         logger.error(
-                            "@${httpMethodAnnotation.method} URL does not define a dynamic path parameter matching '$name'.",
-                            pathAnnotation.annotation
+                            "Dynamic query parameters must be provided via @Query function parameters. " +
+                                "Found in the query string: ${dynamicQueryParameters.joinToString { it.value }}",
+                            httpMethodAnnotation.annotation
                         )
                     }
                 }
-                expectedPathParameterNames.remove(name)
-            }
-            expectedPathParameterNames.forEach { missingPathParameter ->
-                logger.error(
-                    "Missing @Path for '$missingPathParameter', which is defined in the @${httpMethodAnnotation.method} URL.",
-                    this
-                )
-            }
-        }
 
-        val httpMethodAnnotation = httpMethodAnnotations.firstOrNull()
-        val relativePath = httpMethodAnnotation?.relativePath
-        val relativeUrl = when {
-            relativePath != null -> {
-                val urlQueryParameters = httpMethodAnnotation.queryParameters
-                val dynamicQueryParameters = allParameterAnnotations
-                    .filterIsInstance<HttpParameterAnnotation.Query>()
-                    .map { it.name to Dynamic(parameterName = it.parameter.name!!.asString()) }
+                val expectedPathParameterNames = urlTemplateParameters
+                    .map { it.value.removeSurrounding(prefix = "{", suffix = "}") }
+                    .toMutableSet()
 
-                val allQueryParameters: List<Pair<String, StringValue>> = urlQueryParameters + dynamicQueryParameters
-                allQueryParameters.groupBy { it.first }.forEach { (name, occurrences) ->
+                pathAnnotationsByName.forEach { (name, occurrences) ->
                     if (occurrences.size > 1) {
                         logger.error(
-                            "@Query '$name' is defined ${occurrences.size} times, but at most once is allowed.",
+                            "@Path '$name' is defined ${occurrences.size} times, but at most once is allowed.",
                             this
                         )
                     }
+                    if (!name.matches(URL_TEMPLATE_PARAMETER_NAME_REGEX)) {
+                        occurrences.forEach { pathAnnotation ->
+                            logger.error(
+                                "Invalid @Path parameter name '$name'. Expected format: $URL_TEMPLATE_PARAMETER_NAME_PATTERN",
+                                pathAnnotation.annotation
+                            )
+                        }
+                    } else if (!expectedPathParameterNames.contains(name)) {
+                        occurrences.forEach { pathAnnotation ->
+                            logger.error(
+                                "@${httpMethodAnnotation.method} URL does not define a dynamic path parameter matching '$name'.",
+                                pathAnnotation.annotation
+                            )
+                        }
+                    }
+                    expectedPathParameterNames.remove(name)
                 }
-
-                RelativeUrl.Template(
-                    path = relativePath,
-                    queryParameters = allQueryParameters.toMap()
-                )
+                expectedPathParameterNames.forEach { missingPathParameter ->
+                    logger.error(
+                        "Missing @Path for '$missingPathParameter', which is defined in the @${httpMethodAnnotation.method} URL.",
+                        this
+                    )
+                }
             }
-
-            urlAnnotations.isNotEmpty() -> urlAnnotations.first().parameter.name?.asString()?.let { parameterName ->
-                RelativeUrl.Parameter(name = parameterName)
-            }
-
-            else -> null
         }
 
-        if (httpMethodAnnotation == null || relativeUrl == null) {
-            return null
+        val dynamicQueryParameters = allParameterAnnotations
+            .asSequence()
+            .filterIsInstance<HttpParameterAnnotation.Query>()
+            .mapNotNull { queryAnnotation ->
+                queryAnnotation.parameter.name?.asString()?.let { parameterName ->
+                    StringValue.Dynamic(name = queryAnnotation.name, parameterName = parameterName)
+                }
+            }
+            .toList()
+
+        val httpMethodAnnotation = httpMethodAnnotations.firstOrNull()
+        val url = httpMethodAnnotation?.let {
+            if (httpMethodAnnotation.urlTemplate != null) {
+                val parameterNameReplacementMappings = pathAnnotationsByName
+                    .asSequence()
+                    .mapNotNull { (name, pathAnnotations) ->
+                        val annotation = pathAnnotations.firstOrNull() ?: return@mapNotNull null
+                        val parameterName = annotation.parameter.name?.asString() ?: return@mapNotNull null
+                        "{$name}" to parameterName
+                    }
+                    .toMap()
+
+                ServiceDescription.Url.Template(
+                    value = httpMethodAnnotation.urlTemplate,
+                    type = httpMethodAnnotation.urlTemplate.urlType(httpMethodAnnotation.annotation),
+                    parameterNameReplacementMappings = parameterNameReplacementMappings,
+                    dynamicQueryParameters = dynamicQueryParameters
+                )
+            } else {
+                urlAnnotations.firstOrNull()?.parameter?.name?.asString()?.let { parameterName ->
+                    ServiceDescription.Url.Dynamic(
+                        parameterName = parameterName,
+                        dynamicQueryParameters = dynamicQueryParameters
+                    )
+                }
+            }
         }
 
         val serviceFunctionParameters: Map<String, TypeName>? = allParameterAnnotations
             .mapNotNull { httpParameterAnnotation ->
-                val parameterName = httpParameterAnnotation.parameter.name!!.asString()
-                val parameterType = httpParameterAnnotation.parameter.type!!.resolve()
+                val parameterName = httpParameterAnnotation.parameter.name?.asString()
+                val parameterType = httpParameterAnnotation.parameter.type?.resolve()
+
+                if (
+                    httpParameterAnnotation is HttpParameterAnnotation.Path &&
+                    parameterType?.nullability == Nullability.NULLABLE
+                ) {
+                    logger.error(
+                        "Nullable @Path parameter types are not allowed",
+                        httpParameterAnnotation.annotation
+                    )
+                }
+
+                if (
+                    httpParameterAnnotation is HttpParameterAnnotation.Url &&
+                    parameterType?.nullability == Nullability.NULLABLE
+                ) {
+                    logger.error(
+                        "Nullable @URL parameter types are not allowed",
+                        httpParameterAnnotation.annotation
+                    )
+                }
+
                 val typeName = if (httpParameterAnnotation is HttpParameterAnnotation.Body) {
                     parameterType?.typeNameWithSerializableChecks(
                         node = httpParameterAnnotation.annotation,
@@ -210,26 +258,33 @@ class ServiceParser(private val logger: KSPLogger) {
                 } else {
                     parameterType?.typeName()
                 }
+                if (parameterName == null) {
+                    logger.error("Missing parameter name", httpParameterAnnotation.parameter)
+                }
                 if (typeName == null) {
                     val annotationName = httpParameterAnnotation.annotation.shortName.asString()
                     logger.error(
                         "Could not resolve the @$annotationName parameter type or one of its type arguments.",
                         httpParameterAnnotation.parameter
                     )
-                    return@mapNotNull null
                 }
-                parameterName to typeName
+                if (parameterName != null && typeName != null) {
+                    parameterName to typeName
+                } else {
+                    null
+                }
             }
             .toMap()
             .takeIf { it.size == allParameterAnnotations.size }
 
-        val headers = mutableListOf<Pair<String, StringValue>>()
+        val headers = mutableListOf<StringValue>()
         // dynamic headers
         headers.addAll(
             allParameterAnnotations
                 .asSequence()
                 .filterIsInstance<HttpParameterAnnotation.Header>()
-                .mapNotNull { headerAnnotation ->
+                .mapNotNull
+                { headerAnnotation ->
                     val headerName = headerAnnotation.name
                     if (headerName == HttpHeaders.ContentType) {
                         logger.error(
@@ -247,7 +302,7 @@ class ServiceParser(private val logger: KSPLogger) {
                         return@mapNotNull null
                     }
                     val parameterName = headerAnnotation.parameter.name?.asString()
-                    parameterName?.let { headerName to Dynamic(parameterName) }
+                    parameterName?.let { StringValue.Dynamic(name = headerName, parameterName = parameterName) }
                 }
         )
         headers.addAll(findStaticHeaders())
@@ -255,7 +310,7 @@ class ServiceParser(private val logger: KSPLogger) {
         val bodyParameterName = bodyAnnotations.getOrNull(0)?.parameter?.name?.asString()
         val bodyContentType = bodyAnnotations.getOrNull(0)?.contentType
         val requestBody = if (bodyParameterName != null && bodyContentType != null) {
-            Service.Function.Http.RequestBody(parameterName = bodyParameterName, contentType = bodyContentType)
+            ServiceDescription.HttpRequestBody(parameterName = bodyParameterName, contentType = bodyContentType)
         } else {
             null
         }
@@ -264,23 +319,20 @@ class ServiceParser(private val logger: KSPLogger) {
         val returnTypeName = returnType
             ?.typeNameWithSerializableChecks(this, typeDescriptionForErrorMessage = "Return type")
 
-        if (returnTypeName == null) {
-            logger.error(
-                "Could not resolve the HTTP function return type or one of its type arguments.",
-                this
-            )
+        if (
+            httpMethodAnnotation == null ||
+            url == null ||
+            serviceFunctionParameters == null ||
+            returnTypeName == null
+        ) {
             return null
         }
 
-        if (serviceFunctionParameters == null) {
-            return null
-        }
-
-        return Service.Function.Http(
+        return ServiceDescription.Function.Http(
             name = simpleName.asString(),
             parameters = serviceFunctionParameters,
             method = httpMethodAnnotation.method,
-            relativeUrl = relativeUrl,
+            url = url,
             headers = headers,
             requestBody = requestBody,
             returnType = returnTypeName
@@ -289,68 +341,31 @@ class ServiceParser(private val logger: KSPLogger) {
 
     private fun KSFunctionDeclaration.findHttpMethodAnnotations(): List<HttpMethodAnnotation> {
         return annotations.mapNotNull { annotation ->
-            val httpMethod = when (annotation.shortName.asString()) {
-                "DELETE" -> HttpMethod.DELETE
-                "GET" -> HttpMethod.GET
-                "HEAD" -> HttpMethod.HEAD
-                "OPTIONS" -> HttpMethod.OPTIONS
-                "PATCH" -> HttpMethod.PATCH
-                "POST" -> HttpMethod.POST
-                "PUT" -> HttpMethod.PUT
+            val method = when (val annotationName = annotation.shortName.asString()) {
+                "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT" -> annotationName
                 else -> return@mapNotNull null
             }
-            val resolvedAnnotationType = annotation.resolveHttpAnnotationType() ?: return@mapNotNull null
-            var relativePath: List<StringValue>? = null
-            val queryParameters = mutableListOf<Pair<String, Static>>()
-            annotation.arguments.getOrNull(0)?.let { urlArgument ->
-                val url = urlArgument.value as String
-                if (url.isBlank()) return@let
+            val isBodyAllowed = method == "PATCH" || method == "POST" || method == "PUT"
+            val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
 
-                val (path, query) = url
-                    .split("?", limit = 2)
-                    .let { it[0] to it.getOrNull(1) }
-
-                relativePath = path.split('/').map { part -> part.parseUrlTemplatePart() }
-
-                query?.split('&')?.forEach { queryParameter ->
-                    val (name, value) = queryParameter
-                        .split('=', limit = 2)
-                        .let { it[0] to it.getOrNull(1) }
-
-                    if (value != null) {
-                        when (val stringValue = value.parseUrlTemplatePart()) {
-                            is Dynamic -> {
-                                val param = stringValue.parameterName
-                                logger.error(
-                                    "Dynamic query parameters are not allowed in the URL. Found: {$param}. " +
-                                        "Use @Query function parameters instead.",
-                                    annotation
-                                )
-                            }
-                            is Static -> {
-                                queryParameters.add(Pair(name, stringValue))
-                            }
-                        }
-                    } else {
-                        logger.error("Invalid query parameter format: $queryParameter.", annotation)
-                    }
-                }
+            val urlTemplate: String? = annotation.arguments.getOrNull(0)?.let { urlArgument ->
+                urlArgument.value as? String ?: return@let null
             }
             HttpMethodAnnotation(
                 annotation = annotation,
                 annotationType = resolvedAnnotationType,
-                method = httpMethod,
-                relativePath = relativePath,
-                queryParameters = queryParameters
+                method = method,
+                isBodyAllowed = isBodyAllowed,
+                urlTemplate = urlTemplate
             )
         }
     }
 
-    private fun KSFunctionDeclaration.findStaticHeaders(): List<Pair<String, StringValue>> {
+    private fun KSFunctionDeclaration.findStaticHeaders(): List<StringValue.Static> {
         return annotations
             .asSequence()
             .filter { it.shortName.asString() == "Headers" }
-            .filter { it.resolveHttpAnnotationType() != null }
+            .filter { it.resolveConnectorHttpAnnotation() != null }
             .flatMap { annotation ->
                 @Suppress("UNCHECKED_CAST")
                 val headerStrings = annotation.arguments[0].value as List<String>
@@ -380,7 +395,7 @@ class ServiceParser(private val logger: KSPLogger) {
                         return@mapNotNull null
                     }
                     val value = colonSplits[1].trimStart()
-                    name to Static(value)
+                    StringValue.Static(name = name, value = value)
                 }
             }
             .toList()
@@ -390,7 +405,7 @@ class ServiceParser(private val logger: KSPLogger) {
         return annotations.mapNotNull { annotation ->
             when (annotation.shortName.asString()) {
                 "Body" -> {
-                    val resolvedAnnotationType = annotation.resolveHttpAnnotationType() ?: return@mapNotNull null
+                    val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
                     val contentType = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
                     validateContentType(contentType, annotation)
                     HttpParameterAnnotation.Body(
@@ -401,7 +416,7 @@ class ServiceParser(private val logger: KSPLogger) {
                     )
                 }
                 "JsonBody" -> {
-                    val resolvedAnnotationType = annotation.resolveHttpAnnotationType() ?: return@mapNotNull null
+                    val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
                     HttpParameterAnnotation.Body(
                         contentType = ContentType.Application.Json.toString(),
                         parameter = this,
@@ -410,7 +425,7 @@ class ServiceParser(private val logger: KSPLogger) {
                     )
                 }
                 "Header" -> {
-                    val resolvedAnnotationType = annotation.resolveHttpAnnotationType() ?: return@mapNotNull null
+                    val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
                     val name = annotation.arguments.getOrNull(0)?.value ?: return@mapNotNull null
                     HttpParameterAnnotation.Header(
                         name = name as String,
@@ -420,7 +435,7 @@ class ServiceParser(private val logger: KSPLogger) {
                     )
                 }
                 "Path" -> {
-                    val resolvedAnnotationType = annotation.resolveHttpAnnotationType() ?: return@mapNotNull null
+                    val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
                     val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
                     HttpParameterAnnotation.Path(
                         name = name,
@@ -430,7 +445,7 @@ class ServiceParser(private val logger: KSPLogger) {
                     )
                 }
                 "Query" -> {
-                    val resolvedAnnotationType = annotation.resolveHttpAnnotationType() ?: return@mapNotNull null
+                    val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
                     val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
                     HttpParameterAnnotation.Query(
                         name = name,
@@ -439,8 +454,8 @@ class ServiceParser(private val logger: KSPLogger) {
                         annotationType = resolvedAnnotationType
                     )
                 }
-                "Url" -> {
-                    val resolvedAnnotationType = annotation.resolveHttpAnnotationType() ?: return@mapNotNull null
+                "URL" -> {
+                    val resolvedAnnotationType = annotation.resolveConnectorCoreAnnotation() ?: return@mapNotNull null
                     HttpParameterAnnotation.Url(
                         parameter = this,
                         annotation = annotation,
@@ -460,7 +475,7 @@ class ServiceParser(private val logger: KSPLogger) {
             return qualifiedName?.let { BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.contains(it.asString()) } == true ||
                 annotations.any {
                     it.shortName.asString() == "Serializable" &&
-                        it.annotationType.resolve()?.qualifier() == "kotlinx.serialization"
+                        it.annotationType.resolve()?.packageName == "kotlinx.serialization"
                 }
         }
 
@@ -490,14 +505,43 @@ class ServiceParser(private val logger: KSPLogger) {
     } catch (e: BadContentTypeFormatException) {
         logger.error("Invalid content type: '$contentType'", node)
     }
+
+    private fun String.urlType(node: KSNode): UrlType = when {
+        startsWith("//") -> UrlType.PROTOCOL_RELATIVE
+        startsWith("/") -> UrlType.ABSOLUTE
+        isFullUrl() -> {
+            if (!startsWith("http:") && !startsWith("https:")) {
+                logger.error(
+                    "URL protocol must be HTTP or HTTPS. Found: '${substringBefore(':')}'",
+                    node
+                )
+            }
+            UrlType.FULL
+        }
+        else -> UrlType.RELATIVE
+    }
+
+    private fun String.isFullUrl(): Boolean {
+        for (index in indices) {
+            val char = get(index)
+            return if (index == 0 && char !in 'a'..'z' && char !in 'A'..'Z') {
+                false
+            } else when (char) {
+                ':' -> true
+                in 'a'..'z', in 'A'..'Z', in '0'..'9', '+', '-', '.' -> continue
+                else -> false
+            }
+        }
+        return false
+    }
 }
 
 private data class HttpMethodAnnotation(
     val annotation: KSAnnotation,
     val annotationType: KSType,
-    val method: HttpMethod,
-    val relativePath: List<StringValue>?,
-    val queryParameters: List<Pair<String, Static>>
+    val method: String,
+    val isBodyAllowed: Boolean,
+    val urlTemplate: String?
 )
 
 private sealed class HttpParameterAnnotation {
@@ -540,15 +584,20 @@ private sealed class HttpParameterAnnotation {
     ) : HttpParameterAnnotation()
 }
 
-private fun String.parseUrlTemplatePart(): StringValue =
-    if (startsWith('{') && endsWith('}')) {
-        Dynamic(parameterName = removePrefix("{").removeSuffix("}"))
-    } else {
-        Static(content = this)
-    }
+private const val URL_TEMPLATE_PARAMETER_NAME_PATTERN = "[a-zA-Z][a-zA-Z0-9_-]*"
+private val URL_TEMPLATE_PARAMETER_NAME_REGEX = Regex(URL_TEMPLATE_PARAMETER_NAME_PATTERN)
+private val URL_TEMPLATE_PARAMETER_REGEX = Regex("\\{($URL_TEMPLATE_PARAMETER_NAME_PATTERN)}")
 
-private fun KSAnnotation.resolveHttpAnnotationType(): KSType? =
-    annotationType.resolve()?.takeIf { it.qualifier() == HTTP_ANNOTATIONS_PACKAGE_NAME }
+private fun KSAnnotation.resolveConnectorCoreAnnotation(): KSType? =
+    resolveAnnotationFromPackage(CORE_ANNOTATIONS_PACKAGE_NAME)
+
+private fun KSAnnotation.resolveConnectorHttpAnnotation(): KSType? =
+    resolveAnnotationFromPackage(HTTP_ANNOTATIONS_PACKAGE_NAME)
+
+private fun KSAnnotation.resolveAnnotationFromPackage(packageName: String): KSType? =
+    annotationType.resolve()?.takeIf { it.packageName == packageName }
+
+private const val CORE_ANNOTATIONS_PACKAGE_NAME = "connector"
 
 private const val HTTP_ANNOTATIONS_PACKAGE_NAME = "connector.http"
 

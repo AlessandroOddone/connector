@@ -9,7 +9,7 @@ import org.jetbrains.kotlin.ksp.symbol.KSType
 import org.jetbrains.kotlin.ksp.symbol.KSTypeArgument
 import org.jetbrains.kotlin.ksp.symbol.Nullability
 
-internal fun KSType.qualifier() = declaration.qualifiedName?.getQualifier()
+internal val KSType.packageName get() = declaration.packageName.asString()
 
 internal val KSClassDeclaration.isInterface get() = classKind == ClassKind.INTERFACE
 

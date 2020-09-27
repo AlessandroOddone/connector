@@ -1,6 +1,8 @@
-package connector.http
+package connector
 
-import connector.Service
+import connector.http.GET
+import connector.http.Header
+import connector.http.Headers
 import connector.util.assertHttpLogMatches
 import connector.util.runTest
 import io.ktor.client.utils.buildHeaders
@@ -32,19 +34,19 @@ private val BASE_URL = Url("https://headers/")
 
     @GET("get")
     suspend fun dynamicStringHeader(
-        @Header("header") header: String
+        @Header("header") h: String
     )
 
     @GET("get")
     suspend fun dynamicNullableAnyHeader(
-        @Header("header") header: Any?
+        @Header("header") h: Any?
     )
 
     @GET("get")
     suspend fun multipleDynamicHeaders(
-        @Header("header1") header1: Any?,
-        @Header("header2") header2: Any?,
-        @Header("header3") header3: Any?,
+        @Header("header1") h1: Any?,
+        @Header("header2") h2: Any?,
+        @Header("header3") h3: Any?,
     )
 }
 
@@ -93,7 +95,7 @@ class HttpHeaders {
             append("Accept-Charset", "UTF-8")
             append("Accept", "*/*")
         }
-        service.dynamicStringHeader(header = "value")
+        service.dynamicStringHeader(h = "value")
         assertHttpLogMatches { hasRequestHeaders(expectedHeaders) }
     }
 
@@ -105,7 +107,7 @@ class HttpHeaders {
             append("Accept", "*/*")
         }
         service.dynamicNullableAnyHeader(
-            header = object : Any() {
+            h = object : Any() {
                 override fun toString() = "value"
             }
         )
@@ -118,7 +120,7 @@ class HttpHeaders {
             append("Accept-Charset", "UTF-8")
             append("Accept", "*/*")
         }
-        service.dynamicNullableAnyHeader(header = null)
+        service.dynamicNullableAnyHeader(h = null)
         assertHttpLogMatches { hasRequestHeaders(expectedHeaders) }
     }
 
@@ -131,11 +133,11 @@ class HttpHeaders {
             append("Accept", "*/*")
         }
         service.multipleDynamicHeaders(
-            header1 = object : Any() {
+            h1 = object : Any() {
                 override fun toString() = "value1"
             },
-            header2 = null,
-            header3 = object : Any() {
+            h2 = null,
+            h3 = object : Any() {
                 override fun toString() = "value3"
             }
         )
