@@ -1,5 +1,5 @@
 dependencies {
-    implementation deps.kotlin.symbol_processing
+    implementation deps.ksp
     implementation deps.ktor.client_core.jvm
     implementation project(':connector-codegen')
 }

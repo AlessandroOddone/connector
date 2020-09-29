@@ -9,11 +9,11 @@ buildscript {
                     'compiler'         : "org.jetbrains.kotlin:kotlin-compiler-embeddable:$KOTLIN_VERSION",
                     'gradle_plugin'    : "org.jetbrains.kotlin:kotlin-gradle-plugin:$KOTLIN_VERSION",
                     'gradle_plugin_api': "org.jetbrains.kotlin:kotlin-gradle-plugin-api:$KOTLIN_VERSION",
-                    'stdlib'           : "org.jetbrains.kotlin:kotlin-stdlib:$KOTLIN_VERSION",
-                    'symbol_processing': "org.jetbrains.kotlin:kotlin-symbol-processing-api:$KOTLIN_SYMBOL_PROCESSING_VERSION",
+                    'stdlib'           : "org.jetbrains.kotlin:kotlin-stdlib:$KOTLIN_VERSION"
             ],
             'kotlinpoet'            : "com.squareup:kotlinpoet:$KOTLINPOET_VERSION",
             'kotlin_compile_testing': "com.github.tschuchortdev:kotlin-compile-testing:$KOTLIN_COMPILE_TESTING_VERSION",
+            'ksp'                   : "com.google.devtools.ksp:symbol-processing-api:$KSP_VERSION",
             'ktlint_gradle_plugin'  : "org.jlleitschuh.gradle:ktlint-gradle:$KTLINT_GRADLE_PLUGIN_VERSION",
             'ktor'                  : [
                     'client_core'         : [
@@ -54,12 +54,12 @@ buildscript {
                     ],
             ],
             'serialization'         : [
-                    'plugin' : "org.jetbrains.kotlin:kotlin-serialization:$KOTLIN_VERSION",
-                    'runtime': [
-                            'common': "org.jetbrains.kotlinx:kotlinx-serialization-runtime:$KOTLINX_SERIALIZATION_VERSION",
-                            'jvm'   : "org.jetbrains.kotlinx:kotlinx-serialization-runtime-jvm:$KOTLINX_SERIALIZATION_VERSION",
-                            'js'    : "org.jetbrains.kotlinx:kotlinx-serialization-runtime-js:$KOTLINX_SERIALIZATION_VERSION",
-                            'native': "org.jetbrains.kotlinx:kotlinx-serialization-runtime-native:$KOTLINX_SERIALIZATION_VERSION"
+                    'plugin': "org.jetbrains.kotlin:kotlin-serialization:$KOTLIN_VERSION",
+                    'core'  : [
+                            'common': "org.jetbrains.kotlinx:kotlinx-serialization-core:$KOTLINX_SERIALIZATION_VERSION",
+                            'jvm'   : "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:$KOTLINX_SERIALIZATION_VERSION",
+                            'js'    : "org.jetbrains.kotlinx:kotlinx-serialization-core-js:$KOTLINX_SERIALIZATION_VERSION",
+                            'native': "org.jetbrains.kotlinx:kotlinx-serialization-core-native:$KOTLINX_SERIALIZATION_VERSION"
                     ]
             ],
     ]

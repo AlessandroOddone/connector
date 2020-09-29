@@ -1,5 +1,16 @@
 package connector.processor
 
+import com.google.devtools.ksp.processing.KSPLogger
+import com.google.devtools.ksp.symbol.KSAnnotation
+import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSDeclaration
+import com.google.devtools.ksp.symbol.KSFunctionDeclaration
+import com.google.devtools.ksp.symbol.KSNode
+import com.google.devtools.ksp.symbol.KSPropertyDeclaration
+import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.KSVariableParameter
+import com.google.devtools.ksp.symbol.Modifier
+import com.google.devtools.ksp.symbol.Nullability
 import com.squareup.kotlinpoet.TypeName
 import connector.codegen.ServiceDescription
 import connector.codegen.StringValue
@@ -12,17 +23,6 @@ import connector.processor.util.typeName
 import io.ktor.http.BadContentTypeFormatException
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
-import org.jetbrains.kotlin.ksp.processing.KSPLogger
-import org.jetbrains.kotlin.ksp.symbol.KSAnnotation
-import org.jetbrains.kotlin.ksp.symbol.KSClassDeclaration
-import org.jetbrains.kotlin.ksp.symbol.KSDeclaration
-import org.jetbrains.kotlin.ksp.symbol.KSFunctionDeclaration
-import org.jetbrains.kotlin.ksp.symbol.KSNode
-import org.jetbrains.kotlin.ksp.symbol.KSPropertyDeclaration
-import org.jetbrains.kotlin.ksp.symbol.KSType
-import org.jetbrains.kotlin.ksp.symbol.KSVariableParameter
-import org.jetbrains.kotlin.ksp.symbol.Modifier
-import org.jetbrains.kotlin.ksp.symbol.Nullability
 
 class ServiceParser(private val logger: KSPLogger) {
   fun parse(classDeclaration: KSClassDeclaration): ServiceDescription = with(classDeclaration) {
@@ -475,7 +475,7 @@ class ServiceParser(private val logger: KSPLogger) {
       return qualifiedName?.let { BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.contains(it.asString()) } == true ||
         annotations.any {
           it.shortName.asString() == "Serializable" &&
-            it.annotationType.resolve()?.packageName == "kotlinx.serialization"
+            it.annotationType.resolve().packageName == "kotlinx.serialization"
         }
     }
 
@@ -595,7 +595,7 @@ private fun KSAnnotation.resolveConnectorHttpAnnotation(): KSType? =
   resolveAnnotationFromPackage(HTTP_ANNOTATIONS_PACKAGE_NAME)
 
 private fun KSAnnotation.resolveAnnotationFromPackage(packageName: String): KSType? =
-  annotationType.resolve()?.takeIf { it.packageName == packageName }
+  annotationType.resolve().takeIf { it.packageName == packageName }
 
 private const val CORE_ANNOTATIONS_PACKAGE_NAME = "connector"
 

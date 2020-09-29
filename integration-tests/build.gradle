@@ -1,5 +1,5 @@
 plugins {
-    id("kotlin-ksp") version "$KOTLIN_SYMBOL_PROCESSING_VERSION"
+    id("symbol-processing") version "$KSP_VERSION"
     id 'kotlinx-serialization'
 }
 
@@ -9,7 +9,7 @@ dependencies {
     testImplementation deps.coroutines.core
     testImplementation deps.coroutines.core
     testImplementation deps.ktor.client_mock.jvm
-    testImplementation deps.serialization.runtime.jvm
+    testImplementation deps.serialization.core.jvm
     testImplementation(project(":connector-runtime-http"))
     testImplementation deps.junit
     ksp(project(":connector-processor"))

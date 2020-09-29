@@ -3,7 +3,7 @@ kotlin {
         commonMain {
             dependencies {
                 api deps.ktor.client_core.common
-                api deps.serialization.runtime.common
+                api deps.serialization.core.common
                 api(project(":connector-runtime-core"))
             }
         }
