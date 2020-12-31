@@ -8,7 +8,7 @@ import connector.http.PATCH
 import connector.http.POST
 import connector.http.PUT
 import connector.util.assertHttpLogMatches
-import connector.util.runTest
+import connector.util.runHttpTest
 import io.ktor.http.HttpMethod
 import io.ktor.http.Url
 import org.junit.Test
@@ -26,44 +26,44 @@ private val BASE_URL = Url("https://methods/")
 }
 
 class HttpMethods {
-  @Test fun `@DELETE`() = runTest {
-    val service = HttpMethodsTestService(BASE_URL, httpClient, emptyList())
+  @Test fun `@DELETE`() = runHttpTest {
+    val service = HttpMethodsTestService(BASE_URL, httpClient)
     service.delete()
     assertHttpLogMatches { hasMethod(HttpMethod.Delete) }
   }
 
-  @Test fun `@GET`() = runTest {
-    val service = HttpMethodsTestService(BASE_URL, httpClient, emptyList())
+  @Test fun `@GET`() = runHttpTest {
+    val service = HttpMethodsTestService(BASE_URL, httpClient)
     service.get()
     assertHttpLogMatches { hasMethod(HttpMethod.Get) }
   }
 
-  @Test fun `@HEAD`() = runTest {
-    val service = HttpMethodsTestService(BASE_URL, httpClient, emptyList())
+  @Test fun `@HEAD`() = runHttpTest {
+    val service = HttpMethodsTestService(BASE_URL, httpClient)
     service.head()
     assertHttpLogMatches { hasMethod(HttpMethod.Head) }
   }
 
-  @Test fun `@OPTIONS`() = runTest {
-    val service = HttpMethodsTestService(BASE_URL, httpClient, emptyList())
+  @Test fun `@OPTIONS`() = runHttpTest {
+    val service = HttpMethodsTestService(BASE_URL, httpClient)
     service.options()
     assertHttpLogMatches { hasMethod(HttpMethod.Options) }
   }
 
-  @Test fun `@PATCH`() = runTest {
-    val service = HttpMethodsTestService(BASE_URL, httpClient, emptyList())
+  @Test fun `@PATCH`() = runHttpTest {
+    val service = HttpMethodsTestService(BASE_URL, httpClient)
     service.patch()
     assertHttpLogMatches { hasMethod(HttpMethod.Patch) }
   }
 
-  @Test fun `@POST`() = runTest {
-    val service = HttpMethodsTestService(BASE_URL, httpClient, emptyList())
+  @Test fun `@POST`() = runHttpTest {
+    val service = HttpMethodsTestService(BASE_URL, httpClient)
     service.post()
     assertHttpLogMatches { hasMethod(HttpMethod.Post) }
   }
 
-  @Test fun `@PUT`() = runTest {
-    val service = HttpMethodsTestService(BASE_URL, httpClient, emptyList())
+  @Test fun `@PUT`() = runHttpTest {
+    val service = HttpMethodsTestService(BASE_URL, httpClient)
     service.put()
     assertHttpLogMatches { hasMethod(HttpMethod.Put) }
   }

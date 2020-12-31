@@ -1,8 +1,10 @@
 package connector.util
 
+import io.ktor.client.engine.mock.toByteArray
 import io.ktor.http.Headers
 import io.ktor.http.HttpMethod
 import io.ktor.http.Url
+import kotlinx.coroutines.runBlocking
 
 fun TestContext.assertHttpLogMatches(
   logEntryMatcher: HttpLogEntry.MatcherBuilder.() -> Unit
@@ -43,19 +45,11 @@ fun TestContext.assertHttpLogMatches(
   }
 }
 
-fun HttpLogEntry.assertMatches(matcher: HttpLogEntry.MatcherBuilder.() -> Unit) {
-  val errorMessages = collectErrorMessages(matcher)
-  if (errorMessages.isNotEmpty()) {
-    var errorMessage = "HTTP log entry was not as expected: $this\n"
-    errorMessage += errorMessages.joinToString(prefix = "- ", separator = "\n- ", postfix = "\n")
-    throw AssertionError(errorMessage)
-  }
-}
-
 private fun HttpLogEntry.collectErrorMessages(matcher: HttpLogEntry.MatcherBuilder.() -> Unit): List<String> {
   var expectedUrl: String? = null
   var expectedMethod: HttpMethod? = null
   var expectedRequestHeaders: Headers? = null
+  var expectedRequestBytes: ByteArray? = null
   matcher(
     object : HttpLogEntry.MatcherBuilder {
       override fun hasUrl(url: String) {
@@ -77,25 +71,41 @@ private fun HttpLogEntry.collectErrorMessages(matcher: HttpLogEntry.MatcherBuild
       override fun hasRequestHeaders(headers: Headers) {
         expectedRequestHeaders = headers
       }
+
+      override fun hasRequestBody(bytes: ByteArray) {
+        expectedRequestBytes = bytes
+      }
     }
   )
   val errorMessages = mutableListOf<String>()
   if (expectedUrl != null) {
     val actualUrl = url
     if (actualUrl != expectedUrl) {
-      errorMessages.add("Expected URL '$expectedUrl', but was: '$actualUrl'")
+      errorMessages.add("Expected URL '$expectedUrl', but was: '$actualUrl'.")
     }
   }
   if (expectedMethod != null) {
     val actualMethod = method
     if (actualMethod != expectedMethod) {
-      errorMessages.add("Expected HTTP method ${expectedMethod!!.value}, but was: ${actualMethod.value}")
+      errorMessages.add("Expected HTTP method '${expectedMethod!!.value}', but was: '${actualMethod.value}'.")
     }
   }
   if (expectedRequestHeaders != null) {
     val actualRequestHeaders = requestHeaders
     if (actualRequestHeaders != expectedRequestHeaders) {
-      errorMessages.add("Expected request headers ${expectedRequestHeaders!!.entries()}, but were: ${actualRequestHeaders.entries()}")
+      errorMessages.add(
+        "Expected request headers ${expectedRequestHeaders!!.entries()}, " +
+          "but were: ${actualRequestHeaders.entries()}."
+      )
+    }
+  }
+  if (expectedRequestBytes != null) {
+    val actualRequestBytes = runBlocking { requestBody.toByteArray() }
+    if (!actualRequestBytes.contentEquals(expectedRequestBytes)) {
+      errorMessages.add(
+        "Expected request body '${expectedRequestBytes!!.decodeToString()}', " +
+          "but was '${actualRequestBytes.decodeToString()}'."
+      )
     }
   }
   return errorMessages

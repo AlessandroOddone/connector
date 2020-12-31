@@ -1,17 +1,18 @@
 package connector.processor
 
 import com.google.devtools.ksp.processing.CodeGenerator
+import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSNode
-import com.squareup.kotlinpoet.FileSpec
 import connector.codegen.toFileSpec
+import io.ktor.utils.io.core.use
 import java.io.OutputStreamWriter
 import java.nio.charset.StandardCharsets.UTF_8
 
-class ConnectorProcessor : SymbolProcessor {
+public class ConnectorProcessor : SymbolProcessor {
   private lateinit var codeGenerator: CodeGenerator
   private lateinit var serviceParser: ServiceParser
 
@@ -23,8 +24,7 @@ class ConnectorProcessor : SymbolProcessor {
   ) {
     this.codeGenerator = codeGenerator
     this.serviceParser = ServiceParser(
-      // workaround until error logging works correctly with Gradle plugin
-      // https://github.com/android/kotlin/issues/1
+      // workaround until https://github.com/google/ksp/issues/122 is fixed
       object : KSPLogger by logger {
         override fun error(message: String, symbol: KSNode?) {
           throw IllegalStateException(message)
@@ -36,16 +36,26 @@ class ConnectorProcessor : SymbolProcessor {
   override fun process(resolver: Resolver) {
     resolver
       .getSymbolsWithAnnotation(SERVICE_ANNOTATION_QUALIFIED_NAME)
-      .map { annotated -> serviceParser.parse(annotated as KSClassDeclaration) }
-      .forEach { service -> service.toFileSpec().writeTo(codeGenerator) }
+      .forEach { annotated ->
+        val containingFile = (annotated as? KSClassDeclaration)?.containingFile ?: return@forEach
+        val service = serviceParser.parse(annotated)
+        OutputStreamWriter(
+          codeGenerator.createNewFile(
+            dependencies = Dependencies(
+              dependOnNewChanges = false,
+              sources = arrayOf(containingFile)
+            ),
+            packageName = annotated.packageName.asString(),
+            fileName = service.name,
+            extensionName = "kt"
+          ),
+          UTF_8
+        ).use(service.toFileSpec()::writeTo)
+      }
   }
 
   override fun finish() {
   }
-}
-
-private fun FileSpec.writeTo(codeGenerator: CodeGenerator) {
-  OutputStreamWriter(codeGenerator.createNewFile(packageName, name), UTF_8).use(::writeTo)
 }
 
 private const val SERVICE_ANNOTATION_QUALIFIED_NAME = "connector.Service"

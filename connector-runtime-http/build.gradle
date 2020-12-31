@@ -1,17 +1,17 @@
 kotlin {
-    sourceSets {
-        commonMain {
-            dependencies {
-                api deps.ktor.client_core.common
-                api deps.serialization.core.common
-                api(project(":connector-runtime-core"))
-            }
-        }
-        commonTest {
-            dependencies {
-                implementation kotlin('test-common')
-                implementation kotlin('test-annotations-common')
-            }
-        }
+  sourceSets {
+    commonMain {
+      dependencies {
+        api(project(":connector-runtime-core"))
+        api deps.ktor.client_core.common
+        api deps.serialization.core.common
+      }
     }
+    commonTest {
+      dependencies {
+        implementation(project(":test-util"))
+        implementation deps.ktor.client_mock.common
+      }
+    }
+  }
 }

@@ -5,23 +5,23 @@ import com.squareup.kotlinpoet.ParameterizedTypeName
 import com.squareup.kotlinpoet.TypeName
 import io.ktor.http.HttpHeaders
 
-data class ServiceDescription(
-  val name: String,
-  val functions: List<Function>,
-  val parentInterface: ClassName
+public data class ServiceDescription(
+  public val name: String,
+  public val functions: List<Function>,
+  public val parentInterface: ClassName
 ) {
-  sealed class Function {
-    abstract val name: String
-    abstract val parameters: Map<String, TypeName>
+  public sealed class Function {
+    public abstract val name: String
+    public abstract val parameters: Map<String, TypeName>
 
-    data class Http(
+    public data class Http(
       override val name: String,
       override val parameters: Map<String, TypeName>,
-      val method: String,
-      val url: Url,
-      val headers: List<StringValue>,
-      val requestBody: HttpRequestBody?,
-      val returnType: TypeName
+      public val method: String,
+      public val url: Url,
+      public val headers: List<StringValue>,
+      public val requestBody: HttpRequestBody?,
+      public val returnType: TypeName
     ) : Function() {
       init {
         if (headers.any { it.name == HttpHeaders.ContentType || it.name == HttpHeaders.ContentLength }) {
@@ -46,37 +46,37 @@ data class ServiceDescription(
     }
   }
 
-  sealed class Url {
-    abstract val dynamicQueryParameters: List<StringValue.Dynamic>
+  public sealed class Url {
+    public abstract val dynamicQueryParameters: List<StringValue.Dynamic>
 
-    data class Template(
-      val value: String,
-      val type: UrlType,
-      val parameterNameReplacementMappings: Map<String, String>,
+    public data class Template(
+      public val value: String,
+      public val type: UrlType,
+      public val parameterNameReplacementMappings: Map<String, String>,
       override val dynamicQueryParameters: List<StringValue.Dynamic>
     ) : Url()
 
-    data class Dynamic(
+    public data class Dynamic(
       val parameterName: String,
       override val dynamicQueryParameters: List<StringValue.Dynamic>
     ) : Url()
   }
 
-  data class HttpRequestBody(val parameterName: String, val contentType: String)
+  public data class HttpRequestBody(public val parameterName: String, public val contentType: String)
 }
 
-enum class UrlType { ABSOLUTE, FULL, PROTOCOL_RELATIVE, RELATIVE }
+public enum class UrlType { ABSOLUTE, FULL, PROTOCOL_RELATIVE, RELATIVE }
 
-sealed class StringValue {
-  abstract val name: String
+public sealed class StringValue {
+  public abstract val name: String
 
-  data class Static(
+  public data class Static(
     override val name: String,
-    val value: String
+    public val value: String
   ) : StringValue()
 
-  data class Dynamic(
+  public data class Dynamic(
     override val name: String,
-    val parameterName: String
+    public val parameterName: String
   ) : StringValue()
 }

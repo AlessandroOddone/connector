@@ -5,52 +5,52 @@ package connector.http
  */
 
 @Target(AnnotationTarget.FUNCTION)
-annotation class DELETE(val url: String = "")
+public annotation class DELETE(val url: String = "")
 
 @Target(AnnotationTarget.FUNCTION)
-annotation class GET(val url: String = "")
+public annotation class GET(val url: String = "")
 
 @Target(AnnotationTarget.FUNCTION)
-annotation class HEAD(val url: String = "")
+public annotation class HEAD(val url: String = "")
 
 @Target(AnnotationTarget.FUNCTION)
-annotation class OPTIONS(val url: String = "")
+public annotation class OPTIONS(val url: String = "")
 
 @Target(AnnotationTarget.FUNCTION)
-annotation class PATCH(val url: String = "")
+public annotation class PATCH(val url: String = "")
 
 @Target(AnnotationTarget.FUNCTION)
-annotation class POST(val url: String = "")
+public annotation class POST(val url: String = "")
 
 @Target(AnnotationTarget.FUNCTION)
-annotation class PUT(val url: String = "")
+public annotation class PUT(val url: String = "")
 
 /**
  * URL
  */
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
-annotation class Path(val name: String)
+public annotation class Path(val name: String)
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
-annotation class Query(val name: String)
+public annotation class Query(val name: String)
 
 /**
  * Headers
  */
 
 @Target(AnnotationTarget.FUNCTION)
-annotation class Headers(vararg val values: String)
+public annotation class Headers(vararg val values: String)
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
-annotation class Header(val name: String)
+public annotation class Header(val name: String)
 
 /**
  * Body
  */
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
-annotation class Body(val contentType: String)
+public annotation class Body(val contentType: String)
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
-annotation class JsonBody
+public annotation class JsonBody

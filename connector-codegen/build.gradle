@@ -1,5 +1,5 @@
 dependencies {
-    implementation deps.ktor.client_core.jvm
-    implementation project(":connector-runtime-http")
-    api deps.kotlinpoet
+  implementation deps.ktor.client_core.jvm
+  implementation project(":connector-runtime-http")
+  api deps.kotlinpoet
 }

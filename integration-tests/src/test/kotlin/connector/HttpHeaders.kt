@@ -4,7 +4,7 @@ import connector.http.GET
 import connector.http.Header
 import connector.http.Headers
 import connector.util.assertHttpLogMatches
-import connector.util.runTest
+import connector.util.runHttpTest
 import io.ktor.client.utils.buildHeaders
 import io.ktor.http.Url
 import org.junit.Test
@@ -51,8 +51,8 @@ private val BASE_URL = Url("https://headers/")
 }
 
 class HttpHeaders {
-  @Test fun `@Headers defining a single static header`() = runTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient, emptyList())
+  @Test fun `@Headers defining a single static header`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
     val expectedHeaders = buildHeaders {
       append("header", "value")
       append("Accept-Charset", "UTF-8")
@@ -62,8 +62,8 @@ class HttpHeaders {
     assertHttpLogMatches { hasRequestHeaders(expectedHeaders) }
   }
 
-  @Test fun `@Headers defining multiple static headers`() = runTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient, emptyList())
+  @Test fun `@Headers defining multiple static headers`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
     val expectedHeaders = buildHeaders {
       append("header1", "value1")
       append("header2", "value2")
@@ -74,8 +74,8 @@ class HttpHeaders {
     assertHttpLogMatches { hasRequestHeaders(expectedHeaders) }
   }
 
-  @Test fun `@Headers ignores whitespaces around colon`() = runTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient, emptyList())
+  @Test fun `@Headers ignores whitespaces around colon`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
     val expectedHeaders = buildHeaders {
       append("header1", "value1")
       append("header2", "value2")
@@ -88,8 +88,8 @@ class HttpHeaders {
     assertHttpLogMatches { hasRequestHeaders(expectedHeaders) }
   }
 
-  @Test fun `String @Header argument is used as the header value`() = runTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient, emptyList())
+  @Test fun `String @Header argument is used as the header value`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
     val expectedHeaders = buildHeaders {
       append("header", "value")
       append("Accept-Charset", "UTF-8")
@@ -99,8 +99,8 @@ class HttpHeaders {
     assertHttpLogMatches { hasRequestHeaders(expectedHeaders) }
   }
 
-  @Test fun `'toString' of object @Header argument is used as the header value`() = runTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient, emptyList())
+  @Test fun `'toString' of object @Header argument is used as the header value`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
     val expectedHeaders = buildHeaders {
       append("header", "value")
       append("Accept-Charset", "UTF-8")
@@ -114,8 +114,8 @@ class HttpHeaders {
     assertHttpLogMatches { hasRequestHeaders(expectedHeaders) }
   }
 
-  @Test fun `If the @Header argument is null, the header is omitted`() = runTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient, emptyList())
+  @Test fun `If the @Header argument is null, the header is omitted`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
     val expectedHeaders = buildHeaders {
       append("Accept-Charset", "UTF-8")
       append("Accept", "*/*")
@@ -124,8 +124,8 @@ class HttpHeaders {
     assertHttpLogMatches { hasRequestHeaders(expectedHeaders) }
   }
 
-  @Test fun `Multiple @Header parameters`() = runTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient, emptyList())
+  @Test fun `Multiple @Header parameters`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
     val expectedHeaders = buildHeaders {
       append("header1", "value1")
       append("header3", "value3")

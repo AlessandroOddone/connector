@@ -1,5 +1,6 @@
 package connector.util
 
+import connector.test.util.runTest
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandler
@@ -9,9 +10,8 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.Url
 import io.ktor.http.content.OutgoingContent
 import io.ktor.utils.io.ByteReadChannel
-import kotlinx.coroutines.runBlocking
 
-fun runTest(block: suspend TestContext.() -> Unit) = runBlocking {
+fun runHttpTest(block: suspend TestContext.() -> Unit) = runTest {
   block(
     object : TestContext {
       private var mockHttpRequestHandler = defaultMockHttpRequestHandler
@@ -60,9 +60,12 @@ data class HttpLogEntry(
     fun hasMethod(method: HttpMethod)
     fun hasMethod(method: String)
     fun hasRequestHeaders(headers: Headers)
+    fun hasRequestBody(bytes: ByteArray)
   }
 
   override fun toString(): String = "${method.value} $url"
 }
+
+fun HttpLogEntry.MatcherBuilder.hasRequestBody(text: String) = hasRequestBody(text.encodeToByteArray())
 
 private val defaultMockHttpRequestHandler: MockRequestHandler = { respond(ByteReadChannel.Empty) }

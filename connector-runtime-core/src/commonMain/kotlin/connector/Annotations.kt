@@ -1,7 +1,7 @@
 package connector
 
 @Target(AnnotationTarget.CLASS)
-annotation class Service
+public annotation class Service
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
-annotation class URL
+public annotation class URL

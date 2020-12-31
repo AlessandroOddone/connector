@@ -2,24 +2,24 @@ package connector.http
 
 import io.ktor.http.ContentType
 import io.ktor.http.content.OutgoingContent
-import io.ktor.utils.io.core.Input
+import io.ktor.utils.io.ByteReadChannel
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 
-interface HttpBodySerializer {
-  fun canWrite(contentType: ContentType): Boolean
+public interface HttpBodySerializer {
+  public fun canWrite(contentType: ContentType): Boolean
 
-  fun canRead(contentType: ContentType?): Boolean
+  public fun canRead(contentType: ContentType?): Boolean
 
-  suspend fun <T> write(
+  public suspend fun <T> write(
     serializationStrategy: SerializationStrategy<T>,
-    body: T,
+    content: T,
     contentType: ContentType
   ): OutgoingContent
 
-  suspend fun <T> read(
+  public suspend fun <T> read(
     deserializationStrategy: DeserializationStrategy<T>,
-    body: Input,
+    content: ByteReadChannel,
     contentType: ContentType?
   ): T
 }

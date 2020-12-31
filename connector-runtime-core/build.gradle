@@ -1,10 +1,12 @@
 kotlin {
-    sourceSets {
-        commonTest {
-            dependencies {
-                implementation kotlin('test-common')
-                implementation kotlin('test-annotations-common')
-            }
-        }
+  sourceSets {
+    commonMain {
     }
+    commonTest {
+      dependencies {
+        implementation kotlin('test-common')
+        implementation kotlin('test-annotations-common')
+      }
+    }
+  }
 }

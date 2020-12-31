@@ -8,13 +8,16 @@ import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSNode
 import com.google.devtools.ksp.symbol.KSPropertyDeclaration
 import com.google.devtools.ksp.symbol.KSType
-import com.google.devtools.ksp.symbol.KSVariableParameter
+import com.google.devtools.ksp.symbol.KSTypeArgument
+import com.google.devtools.ksp.symbol.KSValueParameter
 import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.symbol.Nullability
+import com.squareup.kotlinpoet.STAR
 import com.squareup.kotlinpoet.TypeName
 import connector.codegen.ServiceDescription
 import connector.codegen.StringValue
 import connector.codegen.UrlType
+import connector.processor.util.OnTypeArgumentResolvedListener
 import connector.processor.util.className
 import connector.processor.util.isInterface
 import connector.processor.util.isTopLevel
@@ -23,9 +26,10 @@ import connector.processor.util.typeName
 import io.ktor.http.BadContentTypeFormatException
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import java.lang.StringBuilder
 
-class ServiceParser(private val logger: KSPLogger) {
-  fun parse(classDeclaration: KSClassDeclaration): ServiceDescription = with(classDeclaration) {
+public class ServiceParser(private val logger: KSPLogger) {
+  public fun parse(classDeclaration: KSClassDeclaration): ServiceDescription = with(classDeclaration) {
     if (!isInterface || !isTopLevel) {
       logger.error("@Service target must be a top-level interface.", classDeclaration)
     }
@@ -50,7 +54,7 @@ class ServiceParser(private val logger: KSPLogger) {
     return ServiceDescription(
       name = serviceName,
       functions = serviceFunctions,
-      parentInterface = className()
+      parentInterface = className()!!
     )
   }
 
@@ -228,11 +232,11 @@ class ServiceParser(private val logger: KSPLogger) {
     val serviceFunctionParameters: Map<String, TypeName>? = allParameterAnnotations
       .mapNotNull { httpParameterAnnotation ->
         val parameterName = httpParameterAnnotation.parameter.name?.asString()
-        val parameterType = httpParameterAnnotation.parameter.type?.resolve()
+        val parameterType = httpParameterAnnotation.parameter.type.resolve()
 
         if (
           httpParameterAnnotation is HttpParameterAnnotation.Path &&
-          parameterType?.nullability == Nullability.NULLABLE
+          parameterType.nullability == Nullability.NULLABLE
         ) {
           logger.error(
             "Nullable @Path parameter types are not allowed",
@@ -242,7 +246,7 @@ class ServiceParser(private val logger: KSPLogger) {
 
         if (
           httpParameterAnnotation is HttpParameterAnnotation.Url &&
-          parameterType?.nullability == Nullability.NULLABLE
+          parameterType.nullability == Nullability.NULLABLE
         ) {
           logger.error(
             "Nullable @URL parameter types are not allowed",
@@ -251,12 +255,12 @@ class ServiceParser(private val logger: KSPLogger) {
         }
 
         val typeName = if (httpParameterAnnotation is HttpParameterAnnotation.Body) {
-          parameterType?.typeNameWithSerializableChecks(
+          parameterType.typeNameWithValidation(
             node = httpParameterAnnotation.annotation,
-            typeDescriptionForErrorMessage = "@Body parameter type"
+            validationType = TypeNameValidationType.HTTP_BODY_ANNOTATED
           )
         } else {
-          parameterType?.typeName()
+          parameterType.typeName()
         }
         if (parameterName == null) {
           logger.error("Missing parameter name", httpParameterAnnotation.parameter)
@@ -316,8 +320,7 @@ class ServiceParser(private val logger: KSPLogger) {
     }
 
     val returnType = returnType?.resolve()
-    val returnTypeName = returnType
-      ?.typeNameWithSerializableChecks(this, typeDescriptionForErrorMessage = "Return type")
+    val returnTypeName = returnType?.typeNameWithValidation(this, TypeNameValidationType.HTTP_FUNCTION_RETURN)
 
     if (
       httpMethodAnnotation == null ||
@@ -401,7 +404,7 @@ class ServiceParser(private val logger: KSPLogger) {
       .toList()
   }
 
-  private fun KSVariableParameter.findHttpParameterAnnotations(): List<HttpParameterAnnotation> {
+  private fun KSValueParameter.findHttpParameterAnnotations(): List<HttpParameterAnnotation> {
     return annotations.mapNotNull { annotation ->
       when (annotation.shortName.asString()) {
         "Body" -> {
@@ -467,37 +470,132 @@ class ServiceParser(private val logger: KSPLogger) {
     }
   }
 
-  private fun KSType.typeNameWithSerializableChecks(
+  private enum class TypeNameValidationType(
+    val nonSerializableAllowedCanonicalNames: List<String>,
+    val nullNotAllowedCanonicalNames: List<String>
+  ) {
+    HTTP_BODY_ANNOTATED(
+      nonSerializableAllowedCanonicalNames = listOf("connector.http.HttpBody"),
+      nullNotAllowedCanonicalNames = emptyList()
+    ),
+    HTTP_FUNCTION_RETURN(
+      nonSerializableAllowedCanonicalNames = listOf(
+        "kotlin.Unit",
+        "connector.http.HttpBody"
+      ) + NON_ERROR_HTTP_RESULT_TYPES_QUALIFIED_NAMES,
+      nullNotAllowedCanonicalNames = NON_ERROR_HTTP_RESULT_TYPES_QUALIFIED_NAMES + "kotlin.Unit"
+    )
+  }
+
+  private fun KSType.typeNameWithValidation(
     node: KSNode,
-    typeDescriptionForErrorMessage: String
+    validationType: TypeNameValidationType
   ): TypeName? {
     fun KSDeclaration.isSerializable(): Boolean {
-      return qualifiedName?.let { BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.contains(it.asString()) } == true ||
+      val qualifiedName = qualifiedName?.asString() ?: return false
+      return BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.contains(qualifiedName) ||
         annotations.any {
           it.shortName.asString() == "Serializable" &&
             it.annotationType.resolve().packageName == "kotlinx.serialization"
         }
     }
 
-    if (!declaration.isSerializable()) {
-      val typeName = with(declaration) { (qualifiedName ?: simpleName).asString() }
+    val qualifiedOrSimpleName = (declaration.qualifiedName ?: declaration.simpleName).asString()
+
+    if (
+      !validationType.nonSerializableAllowedCanonicalNames.contains(qualifiedOrSimpleName) &&
+      !declaration.isSerializable()
+    ) {
+      val errorSubject = when (validationType) {
+        TypeNameValidationType.HTTP_BODY_ANNOTATED -> "@Body type"
+        TypeNameValidationType.HTTP_FUNCTION_RETURN -> "return type"
+      }
+
       logger.error(
-        "$typeDescriptionForErrorMessage '$typeName' is neither @Serializable " +
-          "nor one of: $BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES",
+        """
+        Invalid $errorSubject: '$qualifiedOrSimpleName'. 
+        Expected either:
+          - A @Serializable type
+          - A built-in serializable type (${BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.joinToString()})
+        """.trimIndent() + validationType.nonSerializableAllowedCanonicalNames.joinToString(
+          "\n  - ",
+          prefix = "\n  - "
+        ),
         node
       )
     }
 
-    return typeName { typeArgument, type ->
-      if (!type.declaration.isSerializable()) {
-        val typeName = with(type.declaration) { (qualifiedName ?: simpleName).asString() }
-        logger.error(
-          "$typeDescriptionForErrorMessage type argument '$typeName' is neither @Serializable " +
-            "nor one of: $BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES",
-          typeArgument
-        )
+    if (
+      nullability == Nullability.NULLABLE &&
+      validationType.nullNotAllowedCanonicalNames.contains(qualifiedOrSimpleName)
+    ) {
+      val errorSubject = when (validationType) {
+        TypeNameValidationType.HTTP_BODY_ANNOTATED -> "@Body type"
+        TypeNameValidationType.HTTP_FUNCTION_RETURN -> "return type"
       }
+      logger.error(
+        "Nullable '$qualifiedOrSimpleName' is not allowed as the $errorSubject. Must be non-null.",
+        node
+      )
     }
+
+    return typeName(
+      onTypeArgumentResolvedListener = object : OnTypeArgumentResolvedListener {
+        override fun onTypeArgumentResolved(
+          argument: KSTypeArgument,
+          argumentTypeName: TypeName,
+          argumentTypeDeclaration: KSDeclaration?,
+          argumentOwner: KSType
+        ) {
+          if (argumentTypeDeclaration?.isSerializable() == true) {
+            return
+          }
+          val isUnitAllowed = when (argumentOwner.declaration.qualifiedName?.asString()) {
+            "connector.http.HttpResult" -> true
+            "connector.http.HttpResponse" -> true
+            "connector.http.HttpResponse.Success" -> true
+            else -> false
+          }
+          @Suppress("UnnecessaryVariable") val isHttpBodyAllowed = isUnitAllowed
+
+          val qualifiedName = argumentTypeDeclaration?.qualifiedName?.asString()
+          if (isUnitAllowed && qualifiedName == "kotlin.Unit") {
+            if (argumentTypeName.isNullable) {
+              logger.error(
+                "Nullable 'kotlin.Unit' type argument is not allowed. Must be non-null.",
+                argument
+              )
+            }
+            return
+          }
+
+          if (isUnitAllowed && argumentTypeName == STAR) {
+            return
+          }
+
+          if (isHttpBodyAllowed && qualifiedName == "connector.http.HttpBody") {
+            return
+          }
+
+          val errorMessageBuilder = StringBuilder(
+            """
+              Invalid type argument: '$argumentTypeName'. 
+              Expected either:
+                - A @Serializable type
+                - A built-in serializable type (${BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.joinToString()})
+            """.trimIndent()
+          )
+          if (isUnitAllowed) {
+            errorMessageBuilder.append("\n  - kotlin.Unit")
+          }
+          if (isHttpBodyAllowed) {
+            errorMessageBuilder.append("\n  - connector.http.HttpBody")
+          }
+
+          logger.error(errorMessageBuilder.toString())
+        }
+      }
+    )
   }
 
   private fun validateContentType(contentType: String, node: KSNode) = try {
@@ -545,40 +643,40 @@ private data class HttpMethodAnnotation(
 )
 
 private sealed class HttpParameterAnnotation {
-  abstract val parameter: KSVariableParameter
+  abstract val parameter: KSValueParameter
   abstract val annotation: KSAnnotation
   abstract val annotationType: KSType
 
   data class Body(
     val contentType: String,
-    override val parameter: KSVariableParameter,
+    override val parameter: KSValueParameter,
     override val annotation: KSAnnotation,
     override val annotationType: KSType
   ) : HttpParameterAnnotation()
 
   data class Header(
     val name: String,
-    override val parameter: KSVariableParameter,
+    override val parameter: KSValueParameter,
     override val annotation: KSAnnotation,
     override val annotationType: KSType
   ) : HttpParameterAnnotation()
 
   data class Path(
     val name: String,
-    override val parameter: KSVariableParameter,
+    override val parameter: KSValueParameter,
     override val annotation: KSAnnotation,
     override val annotationType: KSType
   ) : HttpParameterAnnotation()
 
   data class Query(
     val name: String,
-    override val parameter: KSVariableParameter,
+    override val parameter: KSValueParameter,
     override val annotation: KSAnnotation,
     override val annotationType: KSType
   ) : HttpParameterAnnotation()
 
   data class Url(
-    override val parameter: KSVariableParameter,
+    override val parameter: KSValueParameter,
     override val annotation: KSAnnotation,
     override val annotationType: KSType
   ) : HttpParameterAnnotation()
@@ -602,8 +700,6 @@ private const val CORE_ANNOTATIONS_PACKAGE_NAME = "connector"
 private const val HTTP_ANNOTATIONS_PACKAGE_NAME = "connector.http"
 
 private val BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES = listOf(
-  "kotlin.Unit",
-
   // primitives
   "kotlin.Boolean",
   "kotlin.Byte",
@@ -635,5 +731,11 @@ private val BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES = listOf(
   // collections
   "kotlin.collections.List",
   "kotlin.collections.Map",
-  "kotlin.collections.Set"
+  "kotlin.collections.Set",
+)
+
+private val NON_ERROR_HTTP_RESULT_TYPES_QUALIFIED_NAMES = listOf(
+  "connector.http.HttpResult",
+  "connector.http.HttpResponse",
+  "connector.http.HttpResponse.Success",
 )
