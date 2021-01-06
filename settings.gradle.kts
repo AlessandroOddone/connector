@@ -3,18 +3,20 @@ rootProject.name = "connector"
 enableFeaturePreview("GRADLE_METADATA")
 
 pluginManagement {
-    resolutionStrategy {
-        eachPlugin {
-            when (requested.id.id) {
-                "symbol-processing" -> useModule("com.google.devtools.ksp:symbol-processing:${requested.version}")
-            }
-        }
+  resolutionStrategy {
+    eachPlugin {
+      when (requested.id.id) {
+        "symbol-processing" -> useModule("com.google.devtools.ksp:symbol-processing:${requested.version}")
+      }
     }
+  }
 
-    repositories {
-        gradlePluginPortal()
-        google()
-    }
+  repositories {
+    gradlePluginPortal()
+    google()
+    jcenter()
+    mavenCentral()
+  }
 }
 
 include(":connector-codegen")

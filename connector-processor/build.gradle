@@ -1,5 +1,0 @@
-dependencies {
-  implementation deps.ksp
-  implementation deps.ktor.client_core.jvm
-  implementation project(':connector-codegen')
-}

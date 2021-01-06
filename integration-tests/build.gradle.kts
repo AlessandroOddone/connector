@@ -1,22 +1,16 @@
 plugins {
-  id("symbol-processing") version "$KSP_VERSION"
-  id 'kotlinx-serialization'
+  id("symbol-processing")
+  kotlin("plugin.serialization")
 }
-
-version = "1.0-SNAPSHOT"
 
 dependencies {
   ksp(project(":connector-processor"))
-
   testImplementation(project(":connector-processor"))
   testImplementation(project(":connector-runtime-http"))
   testImplementation(project(":test-util"))
-
-  testImplementation deps.coroutines.core
-  testImplementation deps.coroutines.core
-  testImplementation deps.kotlin_compile_testing
-  testImplementation deps.ktor.client_mock.jvm
-  testImplementation deps.serialization.json.jvm
+  testImplementation(Dependencies.KOTLIN_COMPILE_TESTING)
+  testImplementation(Dependencies.Ktor.CLIENT_MOCK_JVM)
+  testImplementation(Dependencies.KotlinX.Serialization.JSON_JVM)
 }
 
 sourceSets {

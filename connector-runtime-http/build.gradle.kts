@@ -3,14 +3,14 @@ kotlin {
     commonMain {
       dependencies {
         api(project(":connector-runtime-core"))
-        api deps.ktor.client_core.common
-        api deps.serialization.core.common
+        api(Dependencies.Ktor.CLIENT_CORE)
+        api(Dependencies.KotlinX.Serialization.CORE)
       }
     }
     commonTest {
       dependencies {
         implementation(project(":test-util"))
-        implementation deps.ktor.client_mock.common
+        implementation(Dependencies.Ktor.CLIENT_MOCK)
       }
     }
   }
