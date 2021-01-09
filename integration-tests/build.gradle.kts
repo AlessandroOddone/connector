@@ -1,5 +1,5 @@
 plugins {
-  id("symbol-processing")
+  id("com.google.devtools.ksp")
   kotlin("plugin.serialization")
 }
 

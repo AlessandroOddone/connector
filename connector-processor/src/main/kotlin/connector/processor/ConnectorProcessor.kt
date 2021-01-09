@@ -42,7 +42,7 @@ public class ConnectorProcessor : SymbolProcessor {
         OutputStreamWriter(
           codeGenerator.createNewFile(
             dependencies = Dependencies(
-              dependOnNewChanges = false,
+              aggregating = false,
               sources = arrayOf(containingFile)
             ),
             packageName = annotated.packageName.asString(),

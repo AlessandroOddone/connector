@@ -3,12 +3,11 @@ const val VERSION = "0.1-SNAPSHOT"
 
 object Versions {
   const val COROUTINES = "1.4.2"
-  const val JUNIT = "4.12"
   const val KOTLIN = "1.4.21"
   const val KOTLIN_POET = "1.7.2"
   const val KOTLIN_COMPILE_TESTING = "1.3.4"
   const val KOTLINX_SERIALIZATION = "1.0.1"
-  const val KSP = "1.4.20-dev-experimental-20201222"
+  const val KSP = "1.4.20-dev-experimental-20210107"
   const val KTLINT_GRADLE_PLUGIN = "9.4.1"
   const val KTOR = "1.4.1"
 }
@@ -38,5 +37,4 @@ object Dependencies {
     "com.github.tschuchortdev:kotlin-compile-testing-ksp:${Versions.KOTLIN_COMPILE_TESTING}"
   const val KSP = "com.google.devtools.ksp:symbol-processing-api:${Versions.KSP}"
   const val KTLINT_GRADLE_PLUGIN = "org.jlleitschuh.gradle:ktlint-gradle:${Versions.KTLINT_GRADLE_PLUGIN}"
-  const val JUNIT = "junit:junit:${Versions.JUNIT}"
 }

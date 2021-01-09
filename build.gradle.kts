@@ -7,7 +7,7 @@ plugins {
   kotlin("multiplatform") version Versions.KOTLIN apply false
   kotlin("jvm") version Versions.KOTLIN apply false
   kotlin("plugin.serialization") version Versions.KOTLIN apply false
-  id("symbol-processing") version Versions.KSP apply false
+  id("com.google.devtools.ksp") version Versions.KSP apply false
   id("org.jlleitschuh.gradle.ktlint") version Versions.KTLINT_GRADLE_PLUGIN apply false
 }
 
