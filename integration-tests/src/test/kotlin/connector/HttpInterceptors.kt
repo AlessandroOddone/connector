@@ -31,7 +31,7 @@ private val BASE_URL = Url("https://interceptors/")
 }
 
 class HttpInterceptors {
-  @Test fun `chain of interceptors`() = runHttpTest {
+  @Test fun `Chain of interceptors`() = runHttpTest {
     val events = mutableListOf<String>()
 
     fun createInterceptor(tag: String) = object : HttpInterceptor {
@@ -67,7 +67,7 @@ class HttpInterceptors {
     )
   }
 
-  @Test fun `mutate request`() = runHttpTest {
+  @Test fun `Mutate request`() = runHttpTest {
     val interceptor = object : HttpInterceptor {
       override suspend fun HttpInterceptor.Context.intercept(): HttpResult<ByteReadChannel> {
         return proceedWith(
@@ -97,7 +97,7 @@ class HttpInterceptors {
     }
   }
 
-  @Test fun `return result`() = runHttpTest {
+  @Test fun `Return result`() = runHttpTest {
     val interceptor = object : HttpInterceptor {
       override suspend fun HttpInterceptor.Context.intercept(): HttpResult<ByteReadChannel> {
         return request.success(

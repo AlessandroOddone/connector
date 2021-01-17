@@ -6,19 +6,19 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.Url
 import kotlinx.coroutines.runBlocking
 
-fun TestContext.assertHttpLogMatches(
+fun HttpTestContext.assertHttpLogMatches(
   logEntryMatcher: HttpLogEntry.MatcherBuilder.() -> Unit
 ) {
   assertHttpLogMatches(listOf(logEntryMatcher))
 }
 
-fun TestContext.assertHttpLogMatches(
+fun HttpTestContext.assertHttpLogMatches(
   vararg logEntryMatchers: HttpLogEntry.MatcherBuilder.() -> Unit
 ) {
   assertHttpLogMatches(logEntryMatchers.toList())
 }
 
-fun TestContext.assertHttpLogMatches(
+fun HttpTestContext.assertHttpLogMatches(
   logEntryMatchers: Collection<HttpLogEntry.MatcherBuilder.() -> Unit>
 ) {
   if (logEntryMatchers.size != httpLog.size) {

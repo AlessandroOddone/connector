@@ -6,7 +6,6 @@ import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.symbol.KSClassDeclaration
-import com.google.devtools.ksp.symbol.KSNode
 import connector.codegen.toFileSpec
 import io.ktor.utils.io.core.use
 import java.io.OutputStreamWriter
@@ -23,14 +22,7 @@ public class ConnectorProcessor : SymbolProcessor {
     logger: KSPLogger
   ) {
     this.codeGenerator = codeGenerator
-    this.serviceParser = ServiceParser(
-      // workaround until https://github.com/google/ksp/issues/122 is fixed
-      object : KSPLogger by logger {
-        override fun error(message: String, symbol: KSNode?) {
-          throw IllegalStateException(message)
-        }
-      }
-    )
+    this.serviceParser = ServiceParser(logger)
   }
 
   override fun process(resolver: Resolver) {

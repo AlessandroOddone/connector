@@ -408,7 +408,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       }
       beginControlFlow(
         "val·$variableName·=·%M",
-        MemberName(packageName = "io.ktor.client.utils", "buildHeaders")
+        MemberName("io.ktor.client.utils", "buildHeaders")
       )
       for (header in headers) {
         if (header is StringValue.Static) {

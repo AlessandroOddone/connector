@@ -11,9 +11,9 @@ import io.ktor.http.Url
 import io.ktor.http.content.OutgoingContent
 import io.ktor.utils.io.ByteReadChannel
 
-fun runHttpTest(block: suspend TestContext.() -> Unit) = runTest {
+fun runHttpTest(block: suspend HttpTestContext.() -> Unit) = runTest {
   block(
-    object : TestContext {
+    object : HttpTestContext {
       private var mockHttpRequestHandler = defaultMockHttpRequestHandler
 
       override val httpClient = HttpClient(MockEngine) {
@@ -42,7 +42,7 @@ fun runHttpTest(block: suspend TestContext.() -> Unit) = runTest {
   )
 }
 
-interface TestContext {
+interface HttpTestContext {
   val httpClient: HttpClient
   val httpLog: List<HttpLogEntry>
   fun httpRequestHandler(handler: MockRequestHandler)

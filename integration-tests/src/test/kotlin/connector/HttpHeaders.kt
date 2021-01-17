@@ -7,6 +7,7 @@ import connector.util.assertHttpLogMatches
 import connector.util.runHttpTest
 import io.ktor.client.utils.buildHeaders
 import io.ktor.http.Url
+import io.ktor.http.headersOf
 import org.junit.Test
 
 private val BASE_URL = Url("https://headers/")
@@ -47,6 +48,13 @@ private val BASE_URL = Url("https://headers/")
     @Header("header1") h1: Any?,
     @Header("header2") h2: Any?,
     @Header("header3") h3: Any?,
+  )
+
+  @GET("get")
+  @Headers("header:static")
+  suspend fun multipleHeadersWithSameName(
+    @Header("header") h1: String,
+    @Header("header") h2: String,
   )
 }
 
@@ -141,6 +149,17 @@ class HttpHeaders {
         override fun toString() = "value3"
       }
     )
+    assertHttpLogMatches { hasRequestHeaders(expectedHeaders) }
+  }
+
+  @Test fun `Multiple @Header parameters with the same name`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val expectedHeaders = headersOf(
+      "header" to listOf("dynamic1", "dynamic2", "static"),
+      "Accept-Charset" to listOf("UTF-8"),
+      "Accept" to listOf("*/*")
+    )
+    service.multipleHeadersWithSameName(h1 = "dynamic1", h2 = "dynamic2")
     assertHttpLogMatches { hasRequestHeaders(expectedHeaders) }
   }
 }

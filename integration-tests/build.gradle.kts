@@ -9,6 +9,7 @@ dependencies {
   testImplementation(project(":connector-runtime-http"))
   testImplementation(project(":test-util"))
   testImplementation(Dependencies.KOTLIN_COMPILE_TESTING)
+  testImplementation(Dependencies.KSP)
   testImplementation(Dependencies.Ktor.CLIENT_MOCK_JVM)
   testImplementation(Dependencies.KotlinX.Serialization.JSON_JVM)
 }

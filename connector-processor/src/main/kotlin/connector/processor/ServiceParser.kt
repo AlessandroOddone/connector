@@ -64,7 +64,7 @@ public class ServiceParser(private val logger: KSPLogger) {
       logger.error("All functions in @Service interfaces must be annotated with an HTTP method.", this)
     }
     if (httpMethodAnnotations.size > 1) {
-      logger.error("Multiple HTTP method annotations are not allowed on a function.", this)
+      logger.error("Multiple HTTP method annotations are not allowed.", this)
     }
     if (!modifiers.contains(Modifier.SUSPEND)) {
       logger.error("All functions in @Service interfaces must be suspension functions.", this)
@@ -80,11 +80,11 @@ public class ServiceParser(private val logger: KSPLogger) {
       .flatMap { parameter ->
         val parameterAnnotations = parameter.findHttpParameterAnnotations()
         if (parameterAnnotations.isEmpty()) {
-          logger.error("@HTTP function parameter must have a valid annotation.", parameter)
+          logger.error("Function parameter must have a valid connector annotation.", parameter)
         }
         if (parameterAnnotations.size > 1) {
           logger.error(
-            "Multiple Connector annotations are not allowed on the same parameter.",
+            "Multiple connector annotations are not allowed on the same parameter.",
             parameter
           )
         }
@@ -122,10 +122,10 @@ public class ServiceParser(private val logger: KSPLogger) {
     }
     httpMethodAnnotations.forEach { httpMethodAnnotation ->
       if (httpMethodAnnotation.urlTemplate == null && urlAnnotations.isEmpty()) {
-        logger.error("URL must be provided either by @${httpMethodAnnotation.method} or via @Url.", this)
+        logger.error("URL must be provided either by @${httpMethodAnnotation.method} or via @URL.", this)
       }
       if (httpMethodAnnotation.urlTemplate != null && urlAnnotations.isNotEmpty()) {
-        logger.error("URL cannot be provided by both @${httpMethodAnnotation.method} and @Url.", this)
+        logger.error("URL cannot be provided by both @${httpMethodAnnotation.method} and @URL.", this)
       }
     }
 
@@ -136,58 +136,58 @@ public class ServiceParser(private val logger: KSPLogger) {
     httpMethodAnnotations.forEach { httpMethodAnnotation ->
       val urlTemplate = httpMethodAnnotation.urlTemplate
       val urlTemplateParameters = urlTemplate?.let { URL_TEMPLATE_PARAMETER_REGEX.findAll(it) }
+      val questionMarkIndex = urlTemplate?.indexOf('?') ?: -1
 
-      if (urlTemplate != null) {
-        urlTemplateParameters!!
-        val questionMarkIndex = urlTemplate.indexOf('?')
-        if (questionMarkIndex >= 0) {
-          val dynamicQueryParameters = urlTemplateParameters
-            .filter { it.range.first > questionMarkIndex }
-            .toList()
-
-          if (dynamicQueryParameters.isNotEmpty()) {
-            logger.error(
-              "Dynamic query parameters must be provided via @Query function parameters. " +
-                "Found in the query string: ${dynamicQueryParameters.joinToString { it.value }}",
-              httpMethodAnnotation.annotation
-            )
+      val dynamicQueryParameters = mutableListOf<String>()
+      val expectedPathParameterNames = urlTemplateParameters
+        ?.filter { matchResult ->
+          if (questionMarkIndex >= 0 && matchResult.range.first > questionMarkIndex) {
+            dynamicQueryParameters.add(matchResult.value)
+            return@filter false
           }
+          return@filter true
         }
+        ?.map { it.value.removeSurrounding(prefix = "{", suffix = "}") }
+        .orEmpty()
+        .toMutableSet()
 
-        val expectedPathParameterNames = urlTemplateParameters
-          .map { it.value.removeSurrounding(prefix = "{", suffix = "}") }
-          .toMutableSet()
+      if (dynamicQueryParameters.isNotEmpty()) {
+        logger.error(
+          "Dynamic query parameters must be provided via @Query function parameters. " +
+            "Found in the query string: ${dynamicQueryParameters.joinToString()}",
+          httpMethodAnnotation.annotation
+        )
+      }
 
-        pathAnnotationsByName.forEach { (name, occurrences) ->
-          if (occurrences.size > 1) {
-            logger.error(
-              "@Path '$name' is defined ${occurrences.size} times, but at most once is allowed.",
-              this
-            )
-          }
-          if (!name.matches(URL_TEMPLATE_PARAMETER_NAME_REGEX)) {
-            occurrences.forEach { pathAnnotation ->
-              logger.error(
-                "Invalid @Path parameter name '$name'. Expected format: $URL_TEMPLATE_PARAMETER_NAME_PATTERN",
-                pathAnnotation.annotation
-              )
-            }
-          } else if (!expectedPathParameterNames.contains(name)) {
-            occurrences.forEach { pathAnnotation ->
-              logger.error(
-                "@${httpMethodAnnotation.method} URL does not define a dynamic path parameter matching '$name'.",
-                pathAnnotation.annotation
-              )
-            }
-          }
-          expectedPathParameterNames.remove(name)
-        }
-        expectedPathParameterNames.forEach { missingPathParameter ->
+      pathAnnotationsByName.forEach { (name, occurrences) ->
+        if (occurrences.size > 1) {
           logger.error(
-            "Missing @Path for '$missingPathParameter', which is defined in the @${httpMethodAnnotation.method} URL.",
+            "@Path '$name' is defined ${occurrences.size} times, but at most once is allowed.",
             this
           )
         }
+        if (!name.matches(URL_TEMPLATE_PARAMETER_NAME_REGEX)) {
+          occurrences.forEach { pathAnnotation ->
+            logger.error(
+              "Invalid @Path parameter name '$name'. Expected format: $URL_TEMPLATE_PARAMETER_NAME_PATTERN",
+              pathAnnotation.annotation
+            )
+          }
+        } else if (!expectedPathParameterNames.contains(name)) {
+          occurrences.forEach { pathAnnotation ->
+            logger.error(
+              "@${httpMethodAnnotation.method} URL does not define a dynamic path parameter matching '$name'.",
+              pathAnnotation.annotation
+            )
+          }
+        }
+        expectedPathParameterNames.remove(name)
+      }
+      expectedPathParameterNames.forEach { missingPathParameter ->
+        logger.error(
+          "Missing @Path for '$missingPathParameter', which is defined in the @${httpMethodAnnotation.method} URL.",
+          this
+        )
       }
     }
 
@@ -512,15 +512,9 @@ public class ServiceParser(private val logger: KSPLogger) {
       }
 
       logger.error(
-        """
-        Invalid $errorSubject: '$qualifiedOrSimpleName'. 
-        Expected either:
-          - A @Serializable type
-          - A built-in serializable type (${BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.joinToString()})
-        """.trimIndent() + validationType.nonSerializableAllowedCanonicalNames.joinToString(
-          "\n  - ",
-          prefix = "\n  - "
-        ),
+        "Invalid $errorSubject: '$qualifiedOrSimpleName'. Expected either: a @Serializable type, " +
+          "${validationType.nonSerializableAllowedCanonicalNames.joinToString()}, " +
+          "or a built-in serializable type (${BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.joinToString()})",
         node
       )
     }
@@ -578,20 +572,17 @@ public class ServiceParser(private val logger: KSPLogger) {
           }
 
           val errorMessageBuilder = StringBuilder(
-            """
-              Invalid type argument: '$argumentTypeName'. 
-              Expected either:
-                - A @Serializable type
-                - A built-in serializable type (${BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.joinToString()})
-            """.trimIndent()
+            "Invalid type argument: '$argumentTypeName'. Expected either: a @Serializable type, ",
           )
           if (isUnitAllowed) {
-            errorMessageBuilder.append("\n  - kotlin.Unit")
+            errorMessageBuilder.append("kotlin.Unit, ")
           }
           if (isHttpBodyAllowed) {
-            errorMessageBuilder.append("\n  - connector.http.HttpBody")
+            errorMessageBuilder.append("connector.http.HttpBody, ")
           }
-
+          errorMessageBuilder.append(
+            "or a built-in serializable type (${BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.joinToString()}"
+          )
           logger.error(errorMessageBuilder.toString())
         }
       }
