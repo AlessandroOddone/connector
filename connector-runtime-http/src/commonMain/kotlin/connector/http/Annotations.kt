@@ -25,6 +25,9 @@ public annotation class POST(val url: String = "")
 @Target(AnnotationTarget.FUNCTION)
 public annotation class PUT(val url: String = "")
 
+@Target(AnnotationTarget.FUNCTION)
+public annotation class HTTP(val method: String, val url: String = "")
+
 /**
  * URL
  */

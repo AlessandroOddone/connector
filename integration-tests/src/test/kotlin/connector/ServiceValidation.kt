@@ -310,6 +310,30 @@ class ServiceValidation {
     }
   }
 
+  @Test fun `@Path name must match a parameter in the URL template`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @GET("path") suspend fun get(@Path("id") id: String): String
+        @HTTP("CUSTOM", "path") suspend fun custom(@Path("p") p: String)
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@GET URL does not define a dynamic path parameter matching 'id'." atLine 7,
+        "@HTTP URL does not define a dynamic path parameter matching 'p'." atLine 8
+      )
+    }
+  }
+
   @Test fun `@Path is not allowed when the URL is provided via @URL`() {
     val sourceFile = kotlin(
       "Test.kt",
@@ -465,12 +489,16 @@ class ServiceValidation {
 
       @Service interface TestApi {
         @GET suspend fun get(): String
+        @HTTP("CUSTOM") suspend fun custom()
       }
       """
     )
 
     sourceFile.runTestCompilation {
-      assertKspErrors("URL must be provided either by @GET or via @URL." atLine 7)
+      assertKspErrors(
+        "URL must be provided either by @GET or via @URL." atLine 7,
+        "URL must be provided either by @HTTP or via @URL." atLine 8
+      )
     }
   }
 
@@ -485,12 +513,16 @@ class ServiceValidation {
 
       @Service interface TestApi {
         @GET("get") suspend fun get(@URL url: String): String
+        @HTTP("CUSTOM", "custom") suspend fun custom(@URL url: String)
       }
       """
     )
 
     sourceFile.runTestCompilation {
-      assertKspErrors("URL cannot be provided by both @GET and @URL." atLine 7)
+      assertKspErrors(
+        "URL cannot be provided by both @GET and @URL." atLine 7,
+        "URL cannot be provided by both @HTTP and @URL." atLine 8
+      )
     }
   }
 
@@ -525,12 +557,16 @@ class ServiceValidation {
 
       @Service interface TestApi {
         @GET("get/{id}") suspend fun get(): String
+        @HTTP("CUSTOM", "custom/{p}") suspend fun custom()
       }
       """
     )
 
     sourceFile.runTestCompilation {
-      assertKspErrors("Missing @Path for 'id', which is defined in the @GET URL." atLine 7)
+      assertKspErrors(
+        "Missing @Path for 'id', which is defined in the @GET URL." atLine 7,
+        "Missing @Path for 'p', which is defined in the @HTTP URL." atLine 8
+      )
     }
   }
 

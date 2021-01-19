@@ -3,6 +3,7 @@ package connector
 import connector.http.DELETE
 import connector.http.GET
 import connector.http.HEAD
+import connector.http.HTTP
 import connector.http.OPTIONS
 import connector.http.PATCH
 import connector.http.POST
@@ -23,48 +24,79 @@ private val BASE_URL = Url("https://methods/")
   @PATCH("patch") suspend fun patch()
   @POST("post") suspend fun post()
   @PUT("put") suspend fun put()
+  @HTTP(method = "CUSTOM", url = "customMethod") suspend fun customMethod()
 }
 
 class HttpMethods {
   @Test fun `@DELETE`() = runHttpTest {
     val service = HttpMethodsTestService(BASE_URL, httpClient)
     service.delete()
-    assertHttpLogMatches { hasMethod(HttpMethod.Delete) }
+    assertHttpLogMatches {
+      hasMethod(HttpMethod.Delete)
+      hasUrl("${BASE_URL}delete")
+    }
   }
 
   @Test fun `@GET`() = runHttpTest {
     val service = HttpMethodsTestService(BASE_URL, httpClient)
     service.get()
-    assertHttpLogMatches { hasMethod(HttpMethod.Get) }
+    assertHttpLogMatches {
+      hasMethod(HttpMethod.Get)
+      hasUrl("${BASE_URL}get")
+    }
   }
 
   @Test fun `@HEAD`() = runHttpTest {
     val service = HttpMethodsTestService(BASE_URL, httpClient)
     service.head()
-    assertHttpLogMatches { hasMethod(HttpMethod.Head) }
+    assertHttpLogMatches {
+      hasMethod(HttpMethod.Head)
+      hasUrl("${BASE_URL}head")
+    }
   }
 
   @Test fun `@OPTIONS`() = runHttpTest {
     val service = HttpMethodsTestService(BASE_URL, httpClient)
     service.options()
-    assertHttpLogMatches { hasMethod(HttpMethod.Options) }
+    assertHttpLogMatches {
+      hasMethod(HttpMethod.Options)
+      hasUrl("${BASE_URL}options")
+    }
   }
 
   @Test fun `@PATCH`() = runHttpTest {
     val service = HttpMethodsTestService(BASE_URL, httpClient)
     service.patch()
-    assertHttpLogMatches { hasMethod(HttpMethod.Patch) }
+    assertHttpLogMatches {
+      hasMethod(HttpMethod.Patch)
+      hasUrl("${BASE_URL}patch")
+    }
   }
 
   @Test fun `@POST`() = runHttpTest {
     val service = HttpMethodsTestService(BASE_URL, httpClient)
     service.post()
-    assertHttpLogMatches { hasMethod(HttpMethod.Post) }
+    assertHttpLogMatches {
+      hasMethod(HttpMethod.Post)
+      hasUrl("${BASE_URL}post")
+    }
   }
 
   @Test fun `@PUT`() = runHttpTest {
     val service = HttpMethodsTestService(BASE_URL, httpClient)
     service.put()
-    assertHttpLogMatches { hasMethod(HttpMethod.Put) }
+    assertHttpLogMatches {
+      hasMethod(HttpMethod.Put)
+      hasUrl("${BASE_URL}put")
+    }
+  }
+
+  @Test fun `Custom method with @HTTP`() = runHttpTest {
+    val service = HttpMethodsTestService(BASE_URL, httpClient)
+    service.customMethod()
+    assertHttpLogMatches {
+      hasMethod(HttpMethod("CUSTOM"))
+      hasUrl("${BASE_URL}customMethod")
+    }
   }
 }
