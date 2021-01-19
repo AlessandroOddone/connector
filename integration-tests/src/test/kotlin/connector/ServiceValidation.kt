@@ -47,6 +47,48 @@ class ServiceValidation {
     }
   }
 
+  @Test fun `Supertypes are not allowed for @Service interfaces`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+        package test
+
+        import connector.*
+        import connector.http.*
+
+        interface SuperType
+
+        @Service interface TestApi : SuperType {
+          @GET("get") suspend fun get(): String
+        }
+        """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("@Service interfaces cannot have supertypes." atLine 8)
+    }
+  }
+
+  @Test fun `Type parameters are not allowed for @Service interfaces`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+        package test
+
+        import connector.*
+        import connector.http.*
+
+        @Service interface TestApi<T> {
+          @GET("get") suspend fun get(): String
+        }
+        """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("@Service interfaces cannot have type parameters." atLine 6)
+    }
+  }
+
   @Test fun `Abstract property is not allowed`() {
     val sourceFile = kotlin(
       "Test.kt",
@@ -491,11 +533,852 @@ class ServiceValidation {
       assertKspErrors("Missing @Path for 'id', which is defined in the @GET URL." atLine 7)
     }
   }
+
+  @Test fun `Invalid Content-Type format`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") suspend fun post(
+          @Body("application_json") body: String
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("Invalid Content-Type format: 'application_json'." atLine 8)
+    }
+  }
+
+  @Test fun `Invalid @Path parameter name format`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("get/{1234}") suspend fun get(
+          @Path("1234") p: String
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("Invalid @Path parameter name '1234'. Expected format: [a-zA-Z][a-zA-Z0-9_-]*" atLine 8)
+    }
+  }
+
+  @Test fun `Nullable type is not allowed for @Path parameter`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @GET("get/{id}") suspend fun get(
+          @Path("id") id: String?
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("Nullable types are not allowed for @Path parameters." atLine 8)
+    }
+  }
+
+  @Test fun `Nullable type is not allowed for @URL parameter`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @GET suspend fun get(
+          @URL url: String?
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("Nullable types are not allowed for @URL parameters." atLine 8)
+    }
+  }
+
+  @Test fun `Invalid URL protocol`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @GET("invalidProtocol://a/b") suspend fun get(): String
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("URL protocol must be HTTP or HTTPS. Found: 'invalidProtocol'." atLine 7)
+    }
+  }
+
+  @Test fun `Static Content-Type header is not allowed`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post")
+        @Headers("Content-Type: application/json")
+        suspend fun post()
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("Content-Type header cannot be defined via @Headers, but only via @Body." atLine 8)
+    }
+  }
+
+  @Test fun `Dynamic Content-Type header is not allowed`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") suspend fun post(@Header("Content-Type") contentType: String)
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("Content-Type header cannot be defined via @Header, but only via @Body." atLine 7)
+    }
+  }
+
+  @Test fun `Static Content-Length header is not allowed`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post")
+        @Headers("Content-Length: 0")
+        suspend fun post()
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("Content-Length header cannot be defined via @Headers." atLine 8)
+    }
+  }
+
+  @Test fun `Dynamic Content-Length header is not allowed`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") suspend fun post(@Header("Content-Length") contentLength: Int)
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("Content-Length header cannot be defined via @Header." atLine 7)
+    }
+  }
+
+  @Test fun `Invalid static header format`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post")
+        @Headers("invalidFormat")
+        suspend fun post()
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("@Headers values must be formatted as '<name>: <value>'. Found: 'invalidFormat'." atLine 8)
+    }
+  }
+
+  @Test fun `Nullable Unit is not a valid return type`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): Unit?
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("Nullable 'kotlin.Unit' is not allowed as the return type. Must be non-null." atLine 7)
+    }
+  }
+
+  @Test fun `Unknown @Body type`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") suspend fun post(@Body("*/*") body: TypeThatDoesNotExist)
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("Invalid @Body type: '<Error>'. $EXPECTED_BODY_TYPES_MESSAGE_PART" atLine 7)
+    }
+  }
+
+  @Test fun `Unknown return type`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): TypeThatDoesNotExist
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("Invalid return type: '<Error>'. $EXPECTED_RETURN_TYPES_MESSAGE_PART" atLine 7)
+    }
+  }
+
+  @Test fun `Unknown @Body generic argument`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") suspend fun post(@Body("*/*") body: List<TypeThatDoesNotExist>)
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: '<Error>'. $EXPECTED_TYPE_ARGUMENTS_EXCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART" atLine 7
+      )
+    }
+  }
+
+  @Test fun `Unknown return type generic argument`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): Map<
+          TypeThatDoesNotExist, 
+          OtherTypeThatDoesNotExist>
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: '<Error>'. $EXPECTED_TYPE_ARGUMENTS_EXCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART" atLine 8,
+        "Invalid type argument: '<Error>'. $EXPECTED_TYPE_ARGUMENTS_EXCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART" atLine 9
+      )
+    }
+  }
+
+  @Test fun `Unit is not a valid @Body generic argument`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") suspend fun post(@Body("*/*") body: List<Unit>)
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: 'kotlin.Unit'. " +
+          EXPECTED_TYPE_ARGUMENTS_EXCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART atLine 7
+      )
+    }
+  }
+
+  @Test fun `Unit is not a valid return type generic argument`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): List<Unit>
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: 'kotlin.Unit'. " +
+          EXPECTED_TYPE_ARGUMENTS_EXCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART atLine 7
+      )
+    }
+  }
+
+  @Test fun `Star is not a valid @Body generic argument`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") suspend fun post(@Body("*/*") body: List<*>)
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: '*'. $EXPECTED_TYPE_ARGUMENTS_EXCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART" atLine 7
+      )
+    }
+  }
+
+  @Test fun `Star is not a valid return type generic argument`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): List<*>
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: '*'. " +
+          EXPECTED_TYPE_ARGUMENTS_EXCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART atLine 7
+      )
+    }
+  }
+
+  @Test fun `HttpBody is not a valid @Body generic argument`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") suspend fun post(@Body("*/*") body: List<HttpBody<String>>)
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: 'connector.http.HttpBody'. " +
+          EXPECTED_TYPE_ARGUMENTS_EXCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART atLine 7
+      )
+    }
+  }
+
+  @Test fun `HttpBody is not a valid return type generic argument`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): List<HttpBody<String>>
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: 'connector.http.HttpBody'. " +
+          EXPECTED_TYPE_ARGUMENTS_EXCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART atLine 7
+      )
+    }
+  }
+
+  @Test fun `HttpResult is not a valid return type generic argument`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): List<HttpResult<String>>
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: 'connector.http.HttpResult'. " +
+          EXPECTED_TYPE_ARGUMENTS_EXCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART atLine 7
+      )
+    }
+  }
+
+  @Test fun `HttpResponse is not a valid return type generic argument`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): List<HttpResponse<String>>
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: 'connector.http.HttpResponse'. " +
+          EXPECTED_TYPE_ARGUMENTS_EXCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART atLine 7
+      )
+    }
+  }
+
+  @Test fun `HttpResponseSuccess is not a valid return type generic argument`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): List<HttpResponse.Success<String>>
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: 'connector.http.HttpResponse.Success'. " +
+          EXPECTED_TYPE_ARGUMENTS_EXCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART atLine 7
+      )
+    }
+  }
+
+  @Test fun `HttpBody with Unit type argument is not allowed as @Body`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") suspend fun post(
+          @Body("*/*") body: HttpBody<Unit>
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: 'kotlin.Unit'. " +
+          EXPECTED_TYPE_ARGUMENTS_EXCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART atLine 8
+      )
+    }
+  }
+
+  @Test fun `HttpBody with non-@Serializable type argument is not allowed as @Body`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      data class Payload(val value: String)
+
+      @Service interface TestApi {
+        @POST("post") suspend fun post(
+          @JsonBody payload: Payload
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid @Body type: 'test.Payload'. $EXPECTED_BODY_TYPES_MESSAGE_PART" atLine 10
+      )
+    }
+  }
+
+  @Test fun `HttpResult @Body is not allowed`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") suspend fun post(
+          @Body("*/*") body: HttpResult<String>
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid @Body type: 'connector.http.HttpResult'. $EXPECTED_BODY_TYPES_MESSAGE_PART" atLine 8
+      )
+    }
+  }
+
+  @Test fun `HttpResponse @Body is not allowed`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") suspend fun post(
+          @Body("*/*") body: HttpResponse<String>
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid @Body type: 'connector.http.HttpResponse'. $EXPECTED_BODY_TYPES_MESSAGE_PART" atLine 8
+      )
+    }
+  }
+
+  @Test fun `HttpResponseSuccess @Body is not allowed`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") suspend fun post(
+          @Body("*/*") body: HttpResponse.Success<String>
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid @Body type: 'connector.http.HttpResponse.Success'. $EXPECTED_BODY_TYPES_MESSAGE_PART" atLine 8
+      )
+    }
+  }
+
+  @Test fun `HttpBody with non-@Serializable type argument is not allowed as return type`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      data class Payload(val value: String)
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): HttpBody<Payload>
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: 'test.Payload'. " +
+          EXPECTED_TYPE_ARGUMENTS_EXCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART atLine 9
+      )
+    }
+  }
+
+  @Test fun `HttpResult with non-@Serializable type argument is not allowed as return type`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      data class Payload(val value: String)
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): HttpResult<Payload>
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: 'test.Payload'. " +
+          EXPECTED_TYPE_ARGUMENTS_INCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART atLine 9
+      )
+    }
+  }
+
+  @Test fun `HttpResponse with non-@Serializable type argument is not allowed as return type`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      data class Payload(val value: String)
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): HttpResponse<Payload>
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: 'test.Payload'. " +
+          EXPECTED_TYPE_ARGUMENTS_INCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART atLine 9
+      )
+    }
+  }
+
+  @Test fun `HttpResponseSuccess with non-@Serializable type argument is not allowed as return type`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      data class Payload(val value: String)
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): HttpResponse.Success<Payload>
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Invalid type argument: 'test.Payload'. " +
+          EXPECTED_TYPE_ARGUMENTS_INCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART atLine 9
+      )
+    }
+  }
+
+  @Test fun `Nullable Unit is not allowed as type argument of HttpResult`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      data class Payload(val value: String)
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): HttpResult<Unit?>
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Nullable 'kotlin.Unit' type argument is not allowed. Must be non-null." atLine 9
+      )
+    }
+  }
+
+  @Test fun `Nullable Unit is not allowed as type argument of HttpResponse`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      data class Payload(val value: String)
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): HttpResponse<Unit?>
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Nullable 'kotlin.Unit' type argument is not allowed. Must be non-null." atLine 9
+      )
+    }
+  }
+
+  @Test fun `Nullable Unit is not allowed as type argument of HttpResponseSuccess`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      data class Payload(val value: String)
+
+      @Service interface TestApi {
+        @GET("get") suspend fun get(): HttpResponse.Success<Unit?>
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors("Nullable 'kotlin.Unit' type argument is not allowed. Must be non-null." atLine 9)
+    }
+  }
 }
 
+private const val EXPECTED_BODY_TYPES_MESSAGE_PART =
+  "Expected either a @Serializable type, connector.http.HttpBody, or a built-in serializable type " +
+    "(kotlin.Boolean, kotlin.Byte, kotlin.Char, kotlin.Double, kotlin.Float, kotlin.Int, kotlin.Long, kotlin.Short, " +
+    "kotlin.String, kotlin.Pair, kotlin.Triple, kotlin.collections.Map.Entry, kotlin.Array, kotlin.BooleanArray, " +
+    "kotlin.ByteArray, kotlin.CharArray, kotlin.DoubleArray, kotlin.FloatArray, kotlin.IntArray, kotlin.LongArray, " +
+    "kotlin.ShortArray, kotlin.StringArray, kotlin.collections.List, kotlin.collections.Map, kotlin.collections.Set)"
+
 private const val EXPECTED_RETURN_TYPES_MESSAGE_PART =
-  "Expected either: a @Serializable type, kotlin.Unit, connector.http.HttpBody, connector.http.HttpResult, " +
+  "Expected either a @Serializable type, kotlin.Unit, connector.http.HttpBody, connector.http.HttpResult, " +
     "connector.http.HttpResponse, connector.http.HttpResponse.Success, or a built-in serializable type " +
+    "(kotlin.Boolean, kotlin.Byte, kotlin.Char, kotlin.Double, kotlin.Float, kotlin.Int, kotlin.Long, kotlin.Short, " +
+    "kotlin.String, kotlin.Pair, kotlin.Triple, kotlin.collections.Map.Entry, kotlin.Array, kotlin.BooleanArray, " +
+    "kotlin.ByteArray, kotlin.CharArray, kotlin.DoubleArray, kotlin.FloatArray, kotlin.IntArray, kotlin.LongArray, " +
+    "kotlin.ShortArray, kotlin.StringArray, kotlin.collections.List, kotlin.collections.Map, kotlin.collections.Set)"
+
+private const val EXPECTED_TYPE_ARGUMENTS_EXCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART =
+  "Expected either a @Serializable type or a built-in serializable type (kotlin.Boolean, kotlin.Byte, kotlin.Char, " +
+    "kotlin.Double, kotlin.Float, kotlin.Int, kotlin.Long, kotlin.Short, kotlin.String, kotlin.Pair, kotlin.Triple, " +
+    "kotlin.collections.Map.Entry, kotlin.Array, kotlin.BooleanArray, kotlin.ByteArray, kotlin.CharArray, " +
+    "kotlin.DoubleArray, kotlin.FloatArray, kotlin.IntArray, kotlin.LongArray, kotlin.ShortArray, kotlin.StringArray, " +
+    "kotlin.collections.List, kotlin.collections.Map, kotlin.collections.Set)"
+
+private const val EXPECTED_TYPE_ARGUMENTS_INCLUDING_UNIT_AND_HTTP_BODY_MESSAGE_PART =
+  "Expected either a @Serializable type, kotlin.Unit, connector.http.HttpBody, or a built-in serializable type " +
     "(kotlin.Boolean, kotlin.Byte, kotlin.Char, kotlin.Double, kotlin.Float, kotlin.Int, kotlin.Long, kotlin.Short, " +
     "kotlin.String, kotlin.Pair, kotlin.Triple, kotlin.collections.Map.Entry, kotlin.Array, kotlin.BooleanArray, " +
     "kotlin.ByteArray, kotlin.CharArray, kotlin.DoubleArray, kotlin.FloatArray, kotlin.IntArray, kotlin.LongArray, " +

@@ -25,7 +25,7 @@ subprojects {
     mavenLocal()
   }
 
-  tasks.withType<KotlinCompile>().configureEach {
+  tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"
     kotlinOptions {
       freeCompilerArgs = freeCompilerArgs + listOf(
@@ -35,9 +35,14 @@ subprojects {
     }
   }
 
-  tasks.withType<JavaCompile>().configureEach {
+  tasks.withType<JavaCompile> {
     sourceCompatibility = "8"
     targetCompatibility = "8"
+  }
+
+  tasks.withType<Test> {
+    maxHeapSize = "4g"
+    maxParallelForks = 1
   }
 
   val isJvmOnly = isJvmOnly()

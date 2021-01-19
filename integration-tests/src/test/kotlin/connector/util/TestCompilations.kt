@@ -4,16 +4,12 @@ import com.tschuchort.compiletesting.KotlinCompilation
 import com.tschuchort.compiletesting.SourceFile
 import com.tschuchort.compiletesting.symbolProcessors
 import connector.processor.ConnectorProcessor
-import java.io.File
 
 fun SourceFile.runTestCompilation(block: TestCompilationContext.() -> Unit) {
   val compilation = KotlinCompilation().apply {
     symbolProcessors = listOf(ConnectorProcessor())
-    classpaths = listOf(
-      File("../connector-runtime-core/build/classes/kotlin/jvm/main"),
-      File("../connector-runtime-http/build/classes/kotlin/jvm/main")
-    )
     sources = listOf(this@runTestCompilation)
+    inheritClassPath = true
   }
   block(TestCompilationContextImpl(compilation.compile()))
 }

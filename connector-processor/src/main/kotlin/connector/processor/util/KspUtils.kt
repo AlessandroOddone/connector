@@ -47,23 +47,27 @@ internal fun KSType.typeName(
   } else {
     className()
       ?.parameterizedBy(
-        typeArguments = arguments.map { typeArgument ->
-          val resolvedType = typeArgument.type?.resolve()
-          val resolvedTypeName = resolvedType?.typeName(onTypeArgumentResolvedListener)
-          return@map when (typeArgument.variance) {
-            Variance.STAR -> STAR
-            Variance.COVARIANT -> WildcardTypeName.producerOf(resolvedTypeName ?: return null)
-            Variance.CONTRAVARIANT -> WildcardTypeName.consumerOf(resolvedTypeName ?: return null)
-            Variance.INVARIANT -> resolvedTypeName ?: return null
-          }.also {
-            onTypeArgumentResolvedListener?.onTypeArgumentResolved(
-              argument = typeArgument,
-              argumentTypeName = it,
-              argumentTypeDeclaration = resolvedType?.declaration,
-              argumentOwner = this
-            )
+        typeArguments = arguments
+          .map { typeArgument ->
+            val resolvedType = typeArgument.type?.resolve()
+            val resolvedTypeName = resolvedType?.typeName(onTypeArgumentResolvedListener)
+            return@map when (typeArgument.variance) {
+              Variance.STAR -> STAR
+              Variance.COVARIANT -> resolvedTypeName?.let { WildcardTypeName.producerOf(it) }
+              Variance.CONTRAVARIANT -> resolvedTypeName?.let { WildcardTypeName.consumerOf(it) }
+              Variance.INVARIANT -> resolvedTypeName
+            }.also { typeName: TypeName? ->
+              onTypeArgumentResolvedListener?.onTypeArgumentResolved(
+                argument = typeArgument,
+                argumentTypeName = typeName,
+                argumentTypeDeclaration = resolvedType?.declaration,
+                argumentOwner = this
+              )
+            }
           }
-        }
+          // Return null from 'typeName' if we could not resolve one.
+          // Not doing this in the previous 'map' to make sure that we notify the listener for all arguments.
+          .map { typeName: TypeName? -> typeName ?: return@typeName null }
       )
       ?.run {
         val nullable = nullability == Nullability.NULLABLE
@@ -75,7 +79,7 @@ internal fun KSType.typeName(
 internal interface OnTypeArgumentResolvedListener {
   fun onTypeArgumentResolved(
     argument: KSTypeArgument,
-    argumentTypeName: TypeName,
+    argumentTypeName: TypeName?,
     argumentTypeDeclaration: KSDeclaration?,
     argumentOwner: KSType,
   )

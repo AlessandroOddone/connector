@@ -35,11 +35,11 @@ public class ServiceParser(private val logger: KSPLogger) {
     }
 
     if (superTypes.isNotEmpty()) {
-      logger.error("Supertypes are not allowed in @Service interfaces.", classDeclaration)
+      logger.error("@Service interfaces cannot have supertypes.", classDeclaration)
     }
 
     if (typeParameters.isNotEmpty()) {
-      logger.error("Type parameters are not allowed in @Service interfaces.", classDeclaration)
+      logger.error("@Service interfaces cannot have type parameters.", classDeclaration)
     }
 
     val serviceName = simpleName.getShortName()
@@ -101,7 +101,7 @@ public class ServiceParser(private val logger: KSPLogger) {
           ContentType.parse(bodyAnnotation.contentType)
         } catch (badFormatException: BadContentTypeFormatException) {
           logger.error(
-            badFormatException.message ?: "Bad Content-Type format: ${bodyAnnotation.contentType}.",
+            "Invalid Content-Type format: '${bodyAnnotation.contentType}'.",
             bodyAnnotation.annotation
           )
         }
@@ -239,7 +239,7 @@ public class ServiceParser(private val logger: KSPLogger) {
           parameterType.nullability == Nullability.NULLABLE
         ) {
           logger.error(
-            "Nullable @Path parameter types are not allowed",
+            "Nullable types are not allowed for @Path parameters.",
             httpParameterAnnotation.annotation
           )
         }
@@ -249,7 +249,7 @@ public class ServiceParser(private val logger: KSPLogger) {
           parameterType.nullability == Nullability.NULLABLE
         ) {
           logger.error(
-            "Nullable @URL parameter types are not allowed",
+            "Nullable types are not allowed for @URL parameters.",
             httpParameterAnnotation.annotation
           )
         }
@@ -261,16 +261,6 @@ public class ServiceParser(private val logger: KSPLogger) {
           )
         } else {
           parameterType.typeName()
-        }
-        if (parameterName == null) {
-          logger.error("Missing parameter name", httpParameterAnnotation.parameter)
-        }
-        if (typeName == null) {
-          val annotationName = httpParameterAnnotation.annotation.shortName.asString()
-          logger.error(
-            "Could not resolve the @$annotationName parameter type or one of its type arguments.",
-            httpParameterAnnotation.parameter
-          )
         }
         if (parameterName != null && typeName != null) {
           parameterName to typeName
@@ -292,8 +282,7 @@ public class ServiceParser(private val logger: KSPLogger) {
           val headerName = headerAnnotation.name
           if (headerName == HttpHeaders.ContentType) {
             logger.error(
-              "${HttpHeaders.ContentType} header cannot be defined via @Header. " +
-                "Set the desired 'contentType' in a @Body parameter instead.",
+              "${HttpHeaders.ContentType} header cannot be defined via @Header, but only via @Body.",
               headerAnnotation.annotation
             )
             return@mapNotNull null
@@ -376,7 +365,7 @@ public class ServiceParser(private val logger: KSPLogger) {
           val colonSplits = headerString.split(":", limit = 2)
           if (colonSplits.size != 2) {
             logger.error(
-              "@Headers values must be formatted as 'Name: Value'. Found: '$headerString'.",
+              "@Headers values must be formatted as '<name>: <value>'. Found: '$headerString'.",
               annotation
             )
             return@mapNotNull null
@@ -384,8 +373,7 @@ public class ServiceParser(private val logger: KSPLogger) {
           val name = colonSplits[0].trimEnd()
           if (name == HttpHeaders.ContentType) {
             logger.error(
-              "${HttpHeaders.ContentType} header cannot be defined via @Headers. " +
-                "Set the desired 'contentType' in a @Body parameter instead.",
+              "${HttpHeaders.ContentType} header cannot be defined via @Headers, but only via @Body.",
               annotation
             )
             return@mapNotNull null
@@ -410,7 +398,6 @@ public class ServiceParser(private val logger: KSPLogger) {
         "Body" -> {
           val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
           val contentType = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
-          validateContentType(contentType, annotation)
           HttpParameterAnnotation.Body(
             contentType = contentType,
             parameter = this,
@@ -512,7 +499,7 @@ public class ServiceParser(private val logger: KSPLogger) {
       }
 
       logger.error(
-        "Invalid $errorSubject: '$qualifiedOrSimpleName'. Expected either: a @Serializable type, " +
+        "Invalid $errorSubject: '$qualifiedOrSimpleName'. Expected either a @Serializable type, " +
           "${validationType.nonSerializableAllowedCanonicalNames.joinToString()}, " +
           "or a built-in serializable type (${BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.joinToString()})",
         node
@@ -537,7 +524,7 @@ public class ServiceParser(private val logger: KSPLogger) {
       onTypeArgumentResolvedListener = object : OnTypeArgumentResolvedListener {
         override fun onTypeArgumentResolved(
           argument: KSTypeArgument,
-          argumentTypeName: TypeName,
+          argumentTypeName: TypeName?,
           argumentTypeDeclaration: KSDeclaration?,
           argumentOwner: KSType
         ) {
@@ -554,7 +541,7 @@ public class ServiceParser(private val logger: KSPLogger) {
 
           val qualifiedName = argumentTypeDeclaration?.qualifiedName?.asString()
           if (isUnitAllowed && qualifiedName == "kotlin.Unit") {
-            if (argumentTypeName.isNullable) {
+            if (argumentTypeName?.isNullable == true) {
               logger.error(
                 "Nullable 'kotlin.Unit' type argument is not allowed. Must be non-null.",
                 argument
@@ -571,28 +558,29 @@ public class ServiceParser(private val logger: KSPLogger) {
             return
           }
 
+          val typeArgumentName = argumentTypeDeclaration?.qualifiedName?.asString()
+            ?: argumentTypeDeclaration?.simpleName?.asString()
+            ?: argumentTypeName
+
           val errorMessageBuilder = StringBuilder(
-            "Invalid type argument: '$argumentTypeName'. Expected either: a @Serializable type, ",
+            "Invalid type argument: '$typeArgumentName'. Expected either a @Serializable type",
           )
           if (isUnitAllowed) {
-            errorMessageBuilder.append("kotlin.Unit, ")
+            errorMessageBuilder.append(", kotlin.Unit")
           }
           if (isHttpBodyAllowed) {
-            errorMessageBuilder.append("connector.http.HttpBody, ")
+            errorMessageBuilder.append(", connector.http.HttpBody")
+          }
+          if (isUnitAllowed || isHttpBodyAllowed) {
+            errorMessageBuilder.append(",")
           }
           errorMessageBuilder.append(
-            "or a built-in serializable type (${BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.joinToString()}"
+            " or a built-in serializable type (${BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.joinToString()})"
           )
-          logger.error(errorMessageBuilder.toString())
+          logger.error(errorMessageBuilder.toString(), argument)
         }
       }
     )
-  }
-
-  private fun validateContentType(contentType: String, node: KSNode) = try {
-    ContentType.parse(contentType)
-  } catch (e: BadContentTypeFormatException) {
-    logger.error("Invalid content type: '$contentType'", node)
   }
 
   private fun String.urlType(node: KSNode): UrlType = when {
@@ -601,7 +589,7 @@ public class ServiceParser(private val logger: KSPLogger) {
     isFullUrl() -> {
       if (!startsWith("http:") && !startsWith("https:")) {
         logger.error(
-          "URL protocol must be HTTP or HTTPS. Found: '${substringBefore(':')}'",
+          "URL protocol must be HTTP or HTTPS. Found: '${substringBefore(':')}'.",
           node
         )
       }
