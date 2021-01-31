@@ -10,7 +10,8 @@ dependencies {
   testImplementation(project(":test-util"))
   testImplementation(Dependencies.KOTLIN_COMPILE_TESTING)
   testImplementation(Dependencies.KSP)
-  testImplementation(Dependencies.Ktor.CLIENT_MOCK_JVM)
+  testImplementation(Dependencies.Ktor.CLIENT_LOGGING)
+  testImplementation(Dependencies.Ktor.CLIENT_MOCK)
   testImplementation(Dependencies.KotlinX.Serialization.JSON_JVM)
 }
 

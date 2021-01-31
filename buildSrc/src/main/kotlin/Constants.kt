@@ -27,9 +27,8 @@ object Dependencies {
 
   object Ktor {
     const val CLIENT_CORE = "io.ktor:ktor-client-core:${Versions.KTOR}"
-    const val CLIENT_CORE_JVM = "io.ktor:ktor-client-core-jvm:${Versions.KTOR}"
+    const val CLIENT_LOGGING = "io.ktor:ktor-client-logging:${Versions.KTOR}"
     const val CLIENT_MOCK = "io.ktor:ktor-client-mock:${Versions.KTOR}"
-    const val CLIENT_MOCK_JVM = "io.ktor:ktor-client-mock-jvm:${Versions.KTOR}"
   }
 
   const val KOTLIN_POET = "com.squareup:kotlinpoet:${Versions.KOTLIN_POET}"

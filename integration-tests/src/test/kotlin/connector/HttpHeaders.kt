@@ -56,6 +56,49 @@ private val BASE_URL = Url("https://headers/")
     @Header("header") h1: String,
     @Header("header") h2: String,
   )
+
+  @GET("get")
+  @Headers("header:static")
+  suspend fun iterableOfStringHeadersWithSameName(@Header("header") h: Iterable<String>)
+
+  @GET("get")
+  @Headers("header:static")
+  suspend fun iterableOfAnyHeadersWithSameName(@Header("header") h: Iterable<Any>)
+
+  @GET("get")
+  @Headers("header:static")
+  suspend fun collectionOfStringHeadersWithSameName(@Header("header") h: Collection<Any>)
+
+  @GET("get")
+  @Headers("header:static")
+  suspend fun collectionOfAnyHeadersWithSameName(@Header("header") h: Collection<Any>)
+
+  @GET("get")
+  @Headers("header:static")
+  suspend fun listOfStringHeadersWithSameName(@Header("header") h: List<String>)
+
+  @GET("get")
+  @Headers("header:static")
+  suspend fun listOfAnyHeadersWithSameName(@Header("header") h: List<Any>)
+
+  @GET("get")
+  @Headers("header:static")
+  suspend fun setOfStringHeadersWithSameName(@Header("header") h: Set<String>)
+
+  @GET("get")
+  @Headers("header:static")
+  suspend fun setOfAnyHeadersWithSameName(@Header("header") h: Set<Any>)
+
+  @GET("get")
+  @Headers("header:static")
+  suspend fun iterableNullableTypes(
+    @Header("header") h1: Iterable<String>?,
+    @Header("header") h2: Collection<Any>?,
+    @Header("header") h3: List<String?>,
+    @Header("header") h4: Set<Any?>,
+    @Header("header") h5: List<String?>?,
+    @Header("header") h6: Iterable<Any?>?,
+  )
 }
 
 class HttpHeaders {
@@ -161,5 +204,263 @@ class HttpHeaders {
     )
     service.multipleHeadersWithSameName(h1 = "dynamic1", h2 = "dynamic2")
     assertHttpLogMatches { hasRequestHeaders(expectedHeaders) }
+  }
+
+  @Test fun `@Header iterables with non-null values`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
+
+    // [static]
+    service.iterableOfStringHeadersWithSameName(emptyList())
+    // [static, d1, d2]
+    service.iterableOfStringHeadersWithSameName(listOf("d1", "d2"))
+    // [static]
+    service.iterableOfAnyHeadersWithSameName(emptyList())
+    // [static, d10]
+    service.iterableOfAnyHeadersWithSameName(
+      listOf(
+        object : Any() {
+          override fun toString() = "d10"
+        },
+      )
+    )
+
+    // [static]
+    service.collectionOfStringHeadersWithSameName(emptyList())
+    // [static, d1, d2]
+    service.collectionOfStringHeadersWithSameName(listOf("d1", "d2"))
+    // [static]
+    service.collectionOfAnyHeadersWithSameName(emptyList())
+    // [static, d10]
+    service.collectionOfAnyHeadersWithSameName(
+      listOf(
+        object : Any() {
+          override fun toString() = "d10"
+        },
+      )
+    )
+
+    // [static]
+    service.listOfStringHeadersWithSameName(emptyList())
+    // [static, d1, d2]
+    service.listOfStringHeadersWithSameName(listOf("d1", "d2"))
+    // [static]
+    service.listOfAnyHeadersWithSameName(emptyList())
+    // [static, d10]
+    service.listOfAnyHeadersWithSameName(
+      listOf(
+        object : Any() {
+          override fun toString() = "d10"
+        },
+      )
+    )
+
+    // [static]
+    service.setOfStringHeadersWithSameName(emptySet())
+    // [static, d1, d2]
+    service.setOfStringHeadersWithSameName(setOf("d1", "d2"))
+    // [static]
+    service.setOfAnyHeadersWithSameName(emptySet())
+    // [static, d10]
+    service.setOfAnyHeadersWithSameName(
+      setOf(
+        object : Any() {
+          override fun toString() = "d10"
+        },
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("d1", "d2", "static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("d10", "static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("d1", "d2", "static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("d10", "static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("d1", "d2", "static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("d10", "static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("d1", "d2", "static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("d10", "static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+    )
+  }
+
+  @Test fun `@Header iterables with nullable values`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
+
+    // [static]
+    service.iterableNullableTypes(
+      null,
+      null,
+      listOf(null),
+      setOf(null),
+      null,
+      null
+    )
+    // [static, d1, d2, d3, d4, d5, d6]
+    service.iterableNullableTypes(
+      null,
+      null,
+      listOf("d1", "d2"),
+      setOf(null, "d3"),
+      listOf("d4", null, "d5"),
+      setOf(null, "d6", null)
+    )
+
+    assertHttpLogMatches(
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("d1", "d2", "d3", "d4", "d5", "d6", "static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+    )
   }
 }

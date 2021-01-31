@@ -21,7 +21,7 @@ class HttpRequestTests {
       url = Url("/")
     )
     assertEquals(headersOf(), request.headers)
-    assertEquals(EmptyContent, request.bodySupplier())
+    assertEquals(EmptyContent, request.contentSupplier())
   }
 
   @Test fun `simple copy`() = runTest {
@@ -33,14 +33,14 @@ class HttpRequestTests {
         "a" to listOf("1", "2", "3"),
         "b" to listOf("4")
       ),
-      bodySupplier = { ByteArrayContent(expectedBytes) }
+      contentSupplier = { ByteArrayContent(expectedBytes) }
     )
     val copy = original.copy()
 
     assertEquals(original.method, copy.method)
     assertEquals(original.url, copy.url)
     assertEquals(original.headers, copy.headers)
-    val actualBytes = copy.bodySupplier().toByteArray()
+    val actualBytes = copy.contentSupplier().toByteArray()
     assertArrayEquals(expectedBytes, actualBytes)
   }
 
@@ -49,7 +49,7 @@ class HttpRequestTests {
       method = HttpMethod.Get,
       url = Url("/"),
       headers = Headers.Empty,
-      bodySupplier = { EmptyContent }
+      contentSupplier = { EmptyContent }
     )
     val expectedBytes = Random.nextBytes(10)
     val copy = original.copy {
@@ -57,7 +57,7 @@ class HttpRequestTests {
       url.takeFrom(Url("/abc"))
       headers.append("a", "1")
       headers.append("b", "2")
-      bodySupplier = { ByteArrayContent(expectedBytes) }
+      contentSupplier = { ByteArrayContent(expectedBytes) }
     }
 
     assertEquals(HttpMethod.Head, copy.method)
@@ -69,7 +69,7 @@ class HttpRequestTests {
       ),
       copy.headers
     )
-    val actualBytes = copy.bodySupplier().toByteArray()
+    val actualBytes = copy.contentSupplier().toByteArray()
     assertArrayEquals(expectedBytes, actualBytes)
   }
 }

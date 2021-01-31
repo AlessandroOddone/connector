@@ -171,9 +171,7 @@ class ServiceValidation {
     )
 
     sourceFile.runTestCompilation {
-      assertKspErrors(
-        "Multiple HTTP method annotations are not allowed." atLine 7
-      )
+      assertKspErrors("Multiple HTTP method annotations are not allowed. Found: GET, HEAD" atLine 7)
     }
   }
 
@@ -284,7 +282,9 @@ class ServiceValidation {
     )
 
     sourceFile.runTestCompilation {
-      assertKspErrors("Function parameter must have a valid connector annotation." atLine 7)
+      assertKspErrors(
+        "All parameters in a @Service function must have an appropriate connector annotation." atLine 7
+      )
     }
   }
 
@@ -1135,7 +1135,7 @@ class ServiceValidation {
 
       @Service interface TestApi {
         @POST("post") suspend fun post(
-          @JsonBody payload: Payload
+          @Body("application/json") payload: Payload
         )
       }
       """
@@ -1387,6 +1387,520 @@ class ServiceValidation {
 
     sourceFile.runTestCompilation {
       assertKspErrors("Nullable 'kotlin.Unit' type argument is not allowed. Must be non-null." atLine 9)
+    }
+  }
+
+  @Test fun `Multiple HTTP form encoding annotations are not allowed`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") 
+        @FormUrlEncoded
+        @Multipart
+        suspend fun a(
+          @Field("f") field: String,
+          @Part("p") part : String
+        )
+        
+        @POST("post") 
+        @FormUrlEncoded
+        @FormUrlEncoded
+        suspend fun b(
+          @Field("f") field: String,
+        )
+
+        @POST("post") 
+        @Multipart
+        @Multipart
+        suspend fun c(
+          @Part("p") part : String
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Multiple HTTP form encoding annotations are not allowed. Found: FormUrlEncoded, Multipart" atLine 10,
+        "Multiple HTTP form encoding annotations are not allowed. Found: FormUrlEncoded, FormUrlEncoded" atLine 18,
+        "Multiple HTTP form encoding annotations are not allowed. Found: Multipart, Multipart" atLine 25
+      )
+    }
+  }
+
+  @Test fun `@FormUrlEncoded is only allowed for HTTP methods that allow a request body`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @PATCH("path") 
+        @FormUrlEncoded
+        suspend fun patch(
+          @Field("f") field: String,
+        )
+       
+        @POST("path") 
+        @FormUrlEncoded
+        suspend fun post(
+          @Field("f") field: String,
+        )
+        
+        @PUT("path") 
+        @FormUrlEncoded
+        suspend fun put(
+          @Field("f") field: String,
+        )
+        
+        @HTTP("GET", "path") 
+        @FormUrlEncoded
+        suspend fun customGet(
+          @Field("f") field: String,
+        )
+
+        @DELETE("path") 
+        @FormUrlEncoded
+        suspend fun delete(
+          @Field("f") field: String,
+        )
+
+        @GET("path") 
+        @FormUrlEncoded
+        suspend fun get(
+          @Field("f") field: String,
+        )
+
+        @HEAD("path") 
+        @FormUrlEncoded
+        suspend fun head(
+          @Field("f") field: String,
+        )
+
+        @OPTIONS("path") 
+        @FormUrlEncoded
+        suspend fun options(
+          @Field("f") field: String,
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@FormUrlEncoded can only be used with HTTP methods that allow a request body, but found method: DELETE" atLine 33,
+        "@FormUrlEncoded can only be used with HTTP methods that allow a request body, but found method: GET" atLine 39,
+        "@FormUrlEncoded can only be used with HTTP methods that allow a request body, but found method: HEAD" atLine 45,
+        "@FormUrlEncoded can only be used with HTTP methods that allow a request body, but found method: OPTIONS" atLine 51,
+      )
+    }
+  }
+
+  @Test fun `@Multipart is only allowed for HTTP methods that allow a request body`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @PATCH("path") 
+        @Multipart
+        suspend fun patch(
+          @Part("p") part: String,
+        )
+       
+        @POST("path") 
+        @Multipart
+        suspend fun post(
+          @Part("p") part: String,
+        )
+        
+        @PUT("path") 
+        @Multipart
+        suspend fun put(
+          @Part("p") part: String,
+        )
+        
+        @HTTP("GET", "path") 
+        @Multipart
+        suspend fun customGet(
+          @Part("p") part: String,
+        )
+
+        @DELETE("path") 
+        @Multipart
+        suspend fun delete(
+          @Part("p") part: String,
+        )
+
+        @GET("path") 
+        @Multipart
+        suspend fun get(
+          @Part("p") part: String,
+        )
+
+        @HEAD("path") 
+        @Multipart
+        suspend fun head(
+          @Part("p") part: String,
+        )
+
+        @OPTIONS("path") 
+        @Multipart
+        suspend fun options(
+          @Part("p") part: String,
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@Multipart can only be used with HTTP methods that allow a request body, but found method: DELETE" atLine 33,
+        "@Multipart can only be used with HTTP methods that allow a request body, but found method: GET" atLine 39,
+        "@Multipart can only be used with HTTP methods that allow a request body, but found method: HEAD" atLine 45,
+        "@Multipart can only be used with HTTP methods that allow a request body, but found method: OPTIONS" atLine 51,
+      )
+    }
+  }
+
+  @Test fun `@Body is not allowed in @FormUrlEncoded requests`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") 
+        @FormUrlEncoded
+        suspend fun post(
+          @Field("f") field: String,
+          @Body("text/plain") text: String
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@Body is not allowed in @FormUrlEncoded requests." atLine 11
+      )
+    }
+  }
+
+  @Test fun `@Body is not allowed in @Multipart requests`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") 
+        @Multipart
+        suspend fun post(
+          @Part("p") part: String,
+          @Body("*/*") body: String,
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@Body is not allowed in @Multipart requests." atLine 11,
+      )
+    }
+  }
+
+  @Test fun `@Field is only allowed in @FormUrlEncoded requests`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") 
+        suspend fun post(
+          @Field("f") field: String
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@Field can only be used in @FormUrlEncoded requests." atLine 9,
+      )
+    }
+  }
+
+  @Test fun `@FieldMap is only allowed in @FormUrlEncoded requests`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+      import io.ktor.util.StringValues
+
+      @Service interface TestApi {
+        @POST("post") 
+        suspend fun post(
+          @FieldMap fields: StringValues
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@FieldMap can only be used in @FormUrlEncoded requests." atLine 10
+      )
+    }
+  }
+
+  @Test fun `@FormUrlEncoded functions must have at least a @Field or @FieldMap parameter`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") 
+        @FormUrlEncoded
+        suspend fun post()
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@FormUrlEncoded functions must have at least one @Field or @FieldMap parameter." atLine 9
+      )
+    }
+  }
+
+  @Test fun `@Part is only allowed in @Multipart requests`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") 
+        suspend fun post(
+          @Part("p") part: String
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@Part can only be used in @Multipart requests." atLine 9,
+      )
+    }
+  }
+
+  @Test fun `@PartMap is only allowed in @Multipart requests`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+      import io.ktor.util.StringValues
+
+      @Service interface TestApi {
+        @POST("post") 
+        suspend fun post(
+          @PartMap parts: StringValues
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@PartMap can only be used in @Multipart requests." atLine 10,
+      )
+    }
+  }
+
+  @Test fun `@Multipart functions must have at least a @Part or @PartMap parameter`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+
+      @Service interface TestApi {
+        @POST("post") 
+        @Multipart
+        suspend fun post()
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@Multipart functions must have at least one @Part or @PartMap parameter." atLine 9
+      )
+    }
+  }
+
+  @Test fun `@FieldMap type must be either Map or StringValues`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+      import kotlin.collections.*
+      import io.ktor.util.StringValues
+
+      @Service interface TestApi {
+        @POST("post") 
+        @FormUrlEncoded
+        suspend fun post(
+          @FieldMap("f") valid1: Map<String, String>,
+          @FieldMap("f") valid2: StringValues,
+          @FieldMap("f") notValid: Pair<String, String>
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@FieldMap parameter type must be either 'kotlin.collections.Map' or 'io.ktor.util.StringValues'." atLine 14
+      )
+    }
+  }
+
+  @Test fun `@FieldMap keys must be strings`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+      import kotlin.collections.*
+
+      data class StringWrapper(val value: String)
+
+      @Service interface TestApi {
+        @POST("post") 
+        @FormUrlEncoded
+        suspend fun post(
+          @FieldMap("f") valid: Map<String, String>,
+          @FieldMap("f") notValid1: Map<Int, String>,
+          @FieldMap("f") notValid2: Map<StringWrapper, String>
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@FieldMap keys must be of type 'kotlin.String'." atLine 14,
+        "@FieldMap keys must be of type 'kotlin.String'." atLine 15,
+      )
+    }
+  }
+
+  @Test fun `@PartMap type must be either Map or StringValues`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+      import kotlin.collections.*
+      import io.ktor.util.StringValues
+
+      @Service interface TestApi {
+        @POST("post") 
+        @Multipart
+        suspend fun post(
+          @PartMap("p") valid1: Map<String, String>,
+          @PartMap("p") valid2: StringValues,
+          @PartMap("p") notValid: Pair<String, String>
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@PartMap parameter type must be either 'kotlin.collections.Map' or 'io.ktor.util.StringValues'." atLine 14
+      )
+    }
+  }
+
+  @Test fun `@PartMap keys must be strings`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+      import kotlin.collections.*
+
+      data class StringWrapper(val value: String)
+
+      @Service interface TestApi {
+        @POST("post") 
+        @Multipart
+        suspend fun post(
+          @PartMap("p") valid: Map<String, String>,
+          @PartMap("p") notValid1: Map<Int, String>,
+          @PartMap("p") notValid2: Map<StringWrapper, String>
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@PartMap keys must be of type 'kotlin.String'." atLine 14,
+        "@PartMap keys must be of type 'kotlin.String'." atLine 15,
+      )
     }
   }
 }

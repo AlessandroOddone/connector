@@ -32,7 +32,12 @@ data class KspError(val line: Int, val message: String) {
         .split(":", limit = 3)
         .last()
         .split(":", limit = 2)
-        .let { KspError(line = it[0].toInt(), message = it[1].trimStart()) }
+        .let {
+          if (it.size == 1) {
+            error("Expected line number in: $message")
+          }
+          KspError(line = it[0].toInt(), message = it[1].trimStart())
+        }
     }
   }
 }

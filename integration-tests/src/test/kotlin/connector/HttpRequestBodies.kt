@@ -2,13 +2,13 @@ package connector
 
 import connector.http.Body
 import connector.http.HttpBody
-import connector.http.JsonBody
 import connector.http.POST
 import connector.test.util.assertThrows
+import connector.util.HttpLogEntry
 import connector.util.JsonBodySerializer
 import connector.util.assertHttpLogMatches
-import connector.util.hasRequestBody
 import connector.util.runHttpTest
+import io.ktor.http.ContentType
 import io.ktor.http.Url
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
@@ -18,49 +18,50 @@ import kotlinx.serialization.json.buildJsonObject
 import org.junit.Test
 
 private val BASE_URL = Url("https://requestBodies/")
+private const val JSON = "application/json"
 
 @Service interface HttpRequestBodiesTestService {
-  @POST("postBoolean") suspend fun postBoolean(@JsonBody body: Boolean)
-  @POST("postByte") suspend fun postByte(@JsonBody body: Byte)
-  @POST("postChar") suspend fun postChar(@JsonBody body: Char)
-  @POST("postDouble") suspend fun postDouble(@JsonBody body: Double)
-  @POST("postFloat") suspend fun postFloat(@JsonBody body: Float)
-  @POST("postInt") suspend fun postInt(@JsonBody body: Int)
-  @POST("postLong") suspend fun postLong(@JsonBody body: Long)
-  @POST("postShort") suspend fun postShort(@JsonBody body: Short)
-  @POST("postString") suspend fun postString(@JsonBody body: String)
+  @POST("postBoolean") suspend fun postBoolean(@Body(JSON) body: Boolean)
+  @POST("postByte") suspend fun postByte(@Body(JSON) body: Byte)
+  @POST("postChar") suspend fun postChar(@Body(JSON) body: Char)
+  @POST("postDouble") suspend fun postDouble(@Body(JSON) body: Double)
+  @POST("postFloat") suspend fun postFloat(@Body(JSON) body: Float)
+  @POST("postInt") suspend fun postInt(@Body(JSON) body: Int)
+  @POST("postLong") suspend fun postLong(@Body(JSON) body: Long)
+  @POST("postShort") suspend fun postShort(@Body(JSON) body: Short)
+  @POST("postString") suspend fun postString(@Body(JSON) body: String)
 
-  @POST("postBooleanArray") suspend fun postBooleanArray(@JsonBody body: BooleanArray)
-  @POST("postByteArray") suspend fun postByteArray(@JsonBody body: ByteArray)
-  @POST("postCharArray") suspend fun postCharArray(@JsonBody body: CharArray)
-  @POST("postDoubleArray") suspend fun postDoubleArray(@JsonBody body: DoubleArray)
-  @POST("postFloatArray") suspend fun postFloatArray(@JsonBody body: FloatArray)
-  @POST("postIntArray") suspend fun postIntArray(@JsonBody body: IntArray)
-  @POST("postLongArray") suspend fun postLongArray(@JsonBody body: LongArray)
-  @POST("postShortArray") suspend fun postShortArray(@JsonBody body: ShortArray)
+  @POST("postBooleanArray") suspend fun postBooleanArray(@Body(JSON) body: BooleanArray)
+  @POST("postByteArray") suspend fun postByteArray(@Body(JSON) body: ByteArray)
+  @POST("postCharArray") suspend fun postCharArray(@Body(JSON) body: CharArray)
+  @POST("postDoubleArray") suspend fun postDoubleArray(@Body(JSON) body: DoubleArray)
+  @POST("postFloatArray") suspend fun postFloatArray(@Body(JSON) body: FloatArray)
+  @POST("postIntArray") suspend fun postIntArray(@Body(JSON) body: IntArray)
+  @POST("postLongArray") suspend fun postLongArray(@Body(JSON) body: LongArray)
+  @POST("postShortArray") suspend fun postShortArray(@Body(JSON) body: ShortArray)
 
-  @POST("postSerializable") suspend fun postSerializable(@JsonBody body: Node)
-  @POST("postSerializableWithGeneric") suspend fun postSerializableWithGeneric(@JsonBody body: Wrapper<String>)
-  @POST("postJsonElement") suspend fun postJsonElement(@JsonBody body: JsonElement)
+  @POST("postSerializable") suspend fun postSerializable(@Body(JSON) body: Node)
+  @POST("postSerializableWithGeneric") suspend fun postSerializableWithGeneric(@Body(JSON) body: Wrapper<String>)
+  @POST("postJsonElement") suspend fun postJsonElement(@Body(JSON) body: JsonElement)
 
-  @POST("postArray") suspend fun postArray(@JsonBody body: Array<Node>)
-  @POST("postList") suspend fun postList(@JsonBody body: List<Wrapper<String>>)
-  @POST("postSet") suspend fun postSet(@JsonBody body: Set<Int>)
-  @POST("postMap") suspend fun postMap(@JsonBody body: Map<String, Node>)
-  @POST("postMapEntry") suspend fun postMapEntry(@JsonBody body: Map.Entry<String, Boolean>)
-  @POST("postPair") suspend fun postPair(@JsonBody body: Pair<Long, Node>)
-  @POST("postTriple") suspend fun postTriple(@JsonBody body: Triple<String, Wrapper<String>, Double>)
+  @POST("postArray") suspend fun postArray(@Body(JSON) body: Array<Node>)
+  @POST("postList") suspend fun postList(@Body(JSON) body: List<Wrapper<String>>)
+  @POST("postSet") suspend fun postSet(@Body(JSON) body: Set<Int>)
+  @POST("postMap") suspend fun postMap(@Body(JSON) body: Map<String, Node>)
+  @POST("postMapEntry") suspend fun postMapEntry(@Body(JSON) body: Map.Entry<String, Boolean>)
+  @POST("postPair") suspend fun postPair(@Body(JSON) body: Pair<Long, Node>)
+  @POST("postTriple") suspend fun postTriple(@Body(JSON) body: Triple<String, Wrapper<String>, Double>)
 
-  @POST("postNullableString") suspend fun postNullableString(@JsonBody body: String?)
-  @POST("postNullableIntArray") suspend fun postNullableIntArray(@JsonBody body: IntArray?)
-  @POST("postNullableSerializable") suspend fun postNullableSerializable(@JsonBody body: Node?)
-  @POST("postNullableList") suspend fun postNullableList(@JsonBody body: List<Wrapper<String>>?)
-  @POST("postNullableMap") suspend fun postNullableMap(@JsonBody body: Map<String, Node>?)
+  @POST("postNullableString") suspend fun postNullableString(@Body(JSON) body: String?)
+  @POST("postNullableIntArray") suspend fun postNullableIntArray(@Body(JSON) body: IntArray?)
+  @POST("postNullableSerializable") suspend fun postNullableSerializable(@Body(JSON) body: Node?)
+  @POST("postNullableList") suspend fun postNullableList(@Body(JSON) body: List<Wrapper<String>>?)
+  @POST("postNullableMap") suspend fun postNullableMap(@Body(JSON) body: Map<String, Node>?)
 
   @POST("postGif") suspend fun postGif(@Body("image/gif") body: String)
 
-  @POST("postHttpBody") suspend fun postHttpBody(@JsonBody body: HttpBody<String>)
-  @POST("postNullableHttpBody") suspend fun postNullableHttpBody(@JsonBody body: HttpBody<String>?)
+  @POST("postHttpBody") suspend fun postHttpBody(@Body(JSON) body: HttpBody<String>)
+  @POST("postNullableHttpBody") suspend fun postNullableHttpBody(@Body(JSON) body: HttpBody<String>?)
 }
 
 class HttpRequestBodies {
@@ -69,57 +70,57 @@ class HttpRequestBodies {
     service.postBoolean(true)
     service.postBoolean(false)
     assertHttpLogMatches(
-      { hasRequestBody("true") },
-      { hasRequestBody("false") }
+      { hasJsonRequestBody("true") },
+      { hasJsonRequestBody("false") }
     )
   }
 
   @Test fun `Byte @Body`() = runHttpTest {
     val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postByte(10)
-    assertHttpLogMatches { hasRequestBody("10") }
+    assertHttpLogMatches { hasJsonRequestBody("10") }
   }
 
   @Test fun `Char @Body`() = runHttpTest {
     val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postChar('a')
-    assertHttpLogMatches { hasRequestBody("\"a\"") }
+    assertHttpLogMatches { hasJsonRequestBody("\"a\"") }
   }
 
   @Test fun `Double @Body`() = runHttpTest {
     val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postDouble(-10.7)
-    assertHttpLogMatches { hasRequestBody("-10.7") }
+    assertHttpLogMatches { hasJsonRequestBody("-10.7") }
   }
 
   @Test fun `Float @Body`() = runHttpTest {
     val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postFloat(2.4f)
-    assertHttpLogMatches { hasRequestBody("2.4") }
+    assertHttpLogMatches { hasJsonRequestBody("2.4") }
   }
 
   @Test fun `Int @Body`() = runHttpTest {
     val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postInt(-10)
-    assertHttpLogMatches { hasRequestBody("-10") }
+    assertHttpLogMatches { hasJsonRequestBody("-10") }
   }
 
   @Test fun `Long @Body`() = runHttpTest {
     val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postLong(10)
-    assertHttpLogMatches { hasRequestBody("10") }
+    assertHttpLogMatches { hasJsonRequestBody("10") }
   }
 
   @Test fun `Short @Body`() = runHttpTest {
     val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postShort(0)
-    assertHttpLogMatches { hasRequestBody("0") }
+    assertHttpLogMatches { hasJsonRequestBody("0") }
   }
 
   @Test fun `String @Body`() = runHttpTest {
     val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postString("aString")
-    assertHttpLogMatches { hasRequestBody("\"aString\"") }
+    assertHttpLogMatches { hasJsonRequestBody("\"aString\"") }
   }
 
   @Test fun `BooleanArray @Body`() = runHttpTest {
@@ -128,9 +129,9 @@ class HttpRequestBodies {
     service.postBooleanArray(booleanArrayOf(true))
     service.postBooleanArray(booleanArrayOf(true, false))
     assertHttpLogMatches(
-      { hasRequestBody("[]") },
-      { hasRequestBody("[true]") },
-      { hasRequestBody("[true,false]") }
+      { hasJsonRequestBody("[]") },
+      { hasJsonRequestBody("[true]") },
+      { hasJsonRequestBody("[true,false]") }
     )
   }
 
@@ -140,9 +141,9 @@ class HttpRequestBodies {
     service.postByteArray(byteArrayOf(-10))
     service.postByteArray(byteArrayOf(10, -11))
     assertHttpLogMatches(
-      { hasRequestBody("[]") },
-      { hasRequestBody("[-10]") },
-      { hasRequestBody("[10,-11]") }
+      { hasJsonRequestBody("[]") },
+      { hasJsonRequestBody("[-10]") },
+      { hasJsonRequestBody("[10,-11]") }
     )
   }
 
@@ -152,9 +153,9 @@ class HttpRequestBodies {
     service.postCharArray(charArrayOf('a'))
     service.postCharArray(charArrayOf('a', 'b'))
     assertHttpLogMatches(
-      { hasRequestBody("[]") },
-      { hasRequestBody("[\"a\"]") },
-      { hasRequestBody("[\"a\",\"b\"]") }
+      { hasJsonRequestBody("[]") },
+      { hasJsonRequestBody("[\"a\"]") },
+      { hasJsonRequestBody("[\"a\",\"b\"]") }
     )
   }
 
@@ -164,9 +165,9 @@ class HttpRequestBodies {
     service.postDoubleArray(doubleArrayOf(10.7))
     service.postDoubleArray(doubleArrayOf(10.7, -10.8))
     assertHttpLogMatches(
-      { hasRequestBody("[]") },
-      { hasRequestBody("[10.7]") },
-      { hasRequestBody("[10.7,-10.8]") }
+      { hasJsonRequestBody("[]") },
+      { hasJsonRequestBody("[10.7]") },
+      { hasJsonRequestBody("[10.7,-10.8]") }
     )
   }
 
@@ -176,9 +177,9 @@ class HttpRequestBodies {
     service.postFloatArray(floatArrayOf(-2.4f))
     service.postFloatArray(floatArrayOf(2.4f, 2.5f))
     assertHttpLogMatches(
-      { hasRequestBody("[]") },
-      { hasRequestBody("[-2.4]") },
-      { hasRequestBody("[2.4,2.5]") }
+      { hasJsonRequestBody("[]") },
+      { hasJsonRequestBody("[-2.4]") },
+      { hasJsonRequestBody("[2.4,2.5]") }
     )
   }
 
@@ -188,9 +189,9 @@ class HttpRequestBodies {
     service.postIntArray(intArrayOf(10))
     service.postIntArray(intArrayOf(10, 11))
     assertHttpLogMatches(
-      { hasRequestBody("[]") },
-      { hasRequestBody("[10]") },
-      { hasRequestBody("[10,11]") }
+      { hasJsonRequestBody("[]") },
+      { hasJsonRequestBody("[10]") },
+      { hasJsonRequestBody("[10,11]") }
     )
   }
 
@@ -200,9 +201,9 @@ class HttpRequestBodies {
     service.postLongArray(longArrayOf(-10))
     service.postLongArray(longArrayOf(10, -11))
     assertHttpLogMatches(
-      { hasRequestBody("[]") },
-      { hasRequestBody("[-10]") },
-      { hasRequestBody("[10,-11]") }
+      { hasJsonRequestBody("[]") },
+      { hasJsonRequestBody("[-10]") },
+      { hasJsonRequestBody("[10,-11]") }
     )
   }
 
@@ -212,9 +213,9 @@ class HttpRequestBodies {
     service.postShortArray(shortArrayOf(10))
     service.postShortArray(shortArrayOf(-10, 11))
     assertHttpLogMatches(
-      { hasRequestBody("[]") },
-      { hasRequestBody("[10]") },
-      { hasRequestBody("[-10,11]") }
+      { hasJsonRequestBody("[]") },
+      { hasJsonRequestBody("[10]") },
+      { hasJsonRequestBody("[-10,11]") }
     )
   }
 
@@ -230,7 +231,7 @@ class HttpRequestBodies {
     )
     service.postSerializable(root)
     assertHttpLogMatches {
-      hasRequestBody(
+      hasJsonRequestBody(
         """
           {"id":"1","payload":100,"children":[{"id":"2","payload":200,"children":[]},{"id":"3","payload":300,"children":[]}]}
         """.trimIndent()
@@ -242,7 +243,7 @@ class HttpRequestBodies {
     val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postSerializableWithGeneric(Wrapper("aString"))
     assertHttpLogMatches {
-      hasRequestBody(
+      hasJsonRequestBody(
         """
           {"value":"aString"}
         """.trimIndent()
@@ -263,17 +264,17 @@ class HttpRequestBodies {
     service.postJsonElement(JsonArray(listOf(jsonObject, JsonPrimitive(-9.9f))))
 
     assertHttpLogMatches(
-      { hasRequestBody("\"text\"") },
-      { hasRequestBody("-1000") },
+      { hasJsonRequestBody("\"text\"") },
+      { hasJsonRequestBody("-1000") },
       {
-        hasRequestBody(
+        hasJsonRequestBody(
           """
           {"id":"1","values":[1,2]}
           """.trimIndent()
         )
       },
       {
-        hasRequestBody(
+        hasJsonRequestBody(
           """
           [{"id":"1","values":[1,2]},-9.9]
           """.trimIndent()
@@ -293,16 +294,16 @@ class HttpRequestBodies {
     service.postArray(arrayOf(root, fistChild, secondChild))
 
     assertHttpLogMatches(
-      { hasRequestBody("[]") },
+      { hasJsonRequestBody("[]") },
       {
-        hasRequestBody(
+        hasJsonRequestBody(
           """
           [{"id":"1","payload":100,"children":[{"id":"2","payload":200,"children":[]},{"id":"3","payload":300,"children":[]}]}]
           """.trimIndent()
         )
       },
       {
-        hasRequestBody(
+        hasJsonRequestBody(
           """
           [{"id":"1","payload":100,"children":[{"id":"2","payload":200,"children":[]},{"id":"3","payload":300,"children":[]}]},{"id":"2","payload":200,"children":[]},{"id":"3","payload":300,"children":[]}]
           """.trimIndent()
@@ -319,16 +320,16 @@ class HttpRequestBodies {
     service.postList(listOf(Wrapper("a"), Wrapper("b"), Wrapper("c")))
 
     assertHttpLogMatches(
-      { hasRequestBody("[]") },
+      { hasJsonRequestBody("[]") },
       {
-        hasRequestBody(
+        hasJsonRequestBody(
           """
             [{"value":"a"}]
           """.trimIndent()
         )
       },
       {
-        hasRequestBody(
+        hasJsonRequestBody(
           """
             [{"value":"a"},{"value":"b"},{"value":"c"}]
           """.trimIndent()
@@ -345,9 +346,9 @@ class HttpRequestBodies {
     service.postSet(setOf(-1, 0, 1))
 
     assertHttpLogMatches(
-      { hasRequestBody("[]") },
-      { hasRequestBody("[-1]") },
-      { hasRequestBody("[-1,0,1]") },
+      { hasJsonRequestBody("[]") },
+      { hasJsonRequestBody("[-1]") },
+      { hasJsonRequestBody("[-1,0,1]") },
     )
   }
 
@@ -369,16 +370,16 @@ class HttpRequestBodies {
     )
 
     assertHttpLogMatches(
-      { hasRequestBody("{}") },
+      { hasJsonRequestBody("{}") },
       {
-        hasRequestBody(
+        hasJsonRequestBody(
           """
             {"id1":{"id":"id1","payload":1,"children":[]}}
           """.trimIndent()
         )
       },
       {
-        hasRequestBody(
+        hasJsonRequestBody(
           """
             {"id1":{"id":"id1","payload":1,"children":[]},"id2":{"id":"id2","payload":2,"children":[]},"id3":{"id":"id3","payload":3,"children":[]}}
           """.trimIndent()
@@ -396,7 +397,7 @@ class HttpRequestBodies {
       }
     )
     assertHttpLogMatches {
-      hasRequestBody("{\"key\":true}")
+      hasJsonRequestBody("{\"key\":true}")
     }
   }
 
@@ -404,7 +405,7 @@ class HttpRequestBodies {
     val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postPair(1_000L to Node(id = "id", payload = 1, children = emptyList()))
     assertHttpLogMatches {
-      hasRequestBody(
+      hasJsonRequestBody(
         """
           {"first":1000,"second":{"id":"id","payload":1,"children":[]}}
         """.trimIndent()
@@ -416,7 +417,7 @@ class HttpRequestBodies {
     val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postTriple(Triple("first", Wrapper("second"), -10.0))
     assertHttpLogMatches {
-      hasRequestBody(
+      hasJsonRequestBody(
         """
           {"first":"first","second":{"value":"second"},"third":-10.0}
         """.trimIndent()
@@ -434,11 +435,11 @@ class HttpRequestBodies {
     service.postNullableMap(null)
 
     assertHttpLogMatches(
-      { hasRequestBody("null") },
-      { hasRequestBody("null") },
-      { hasRequestBody("null") },
-      { hasRequestBody("null") },
-      { hasRequestBody("null") },
+      { hasJsonRequestBody("null") },
+      { hasJsonRequestBody("null") },
+      { hasJsonRequestBody("null") },
+      { hasJsonRequestBody("null") },
+      { hasJsonRequestBody("null") },
     )
   }
 
@@ -450,9 +451,9 @@ class HttpRequestBodies {
     service.postNullableHttpBody(null)
 
     assertHttpLogMatches(
-      { hasRequestBody(text = "\"12345\"") },
-      { hasRequestBody(text = "\"12345\"") },
-      { hasRequestBody(ByteArray(0)) },
+      { hasJsonRequestBody(text = "\"12345\"") },
+      { hasJsonRequestBody(text = "\"12345\"") },
+      { hasRequestBody(ByteArray(0), contentType = null) },
     )
   }
 
@@ -476,4 +477,12 @@ data class Node(
 @Serializable
 data class Wrapper<T>(val value: T) {
   override fun toString() = value.toString()
+}
+
+private fun HttpLogEntry.MatcherBuilder.hasJsonRequestBody(bytes: ByteArray) {
+  return hasRequestBody(bytes, ContentType.Application.Json)
+}
+
+private fun HttpLogEntry.MatcherBuilder.hasJsonRequestBody(text: String) {
+  return hasJsonRequestBody(text.encodeToByteArray())
 }

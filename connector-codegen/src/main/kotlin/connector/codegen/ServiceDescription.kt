@@ -20,7 +20,7 @@ public data class ServiceDescription(
       public val method: String,
       public val url: Url,
       public val headers: List<StringValue>,
-      public val requestBody: HttpRequestBody?,
+      public val content: HttpContent?,
       public val returnType: TypeName
     ) : Function() {
       init {
@@ -52,7 +52,7 @@ public data class ServiceDescription(
     public data class Template(
       public val value: String,
       public val type: UrlType,
-      public val parameterNameReplacementMappings: Map<String, String>,
+      public val replaceBlockToParameterMap: Map<String, String>,
       override val dynamicQueryParameters: List<StringValue.Dynamic>
     ) : Url()
 
@@ -62,7 +62,25 @@ public data class ServiceDescription(
     ) : Url()
   }
 
-  public data class HttpRequestBody(public val parameterName: String, public val contentType: String)
+  public sealed class HttpContent {
+    public data class Body(
+      public val parameterName: String,
+      public val contentType: String
+    ) : HttpContent()
+
+    public data class FormUrlEncoded(
+      val parameterToFieldNameMap: Map<String, String>,
+      val fieldMapParameterNames: List<String>
+    ) : HttpContent() {
+      init {
+        if (parameterToFieldNameMap.isEmpty() && fieldMapParameterNames.isEmpty()) {
+          throw IllegalArgumentException(
+            "Either 'parameterToFieldNameMap' or 'fieldMapParameterNames' must be non-empty."
+          )
+        }
+      }
+    }
+  }
 }
 
 public enum class UrlType { ABSOLUTE, FULL, PROTOCOL_RELATIVE, RELATIVE }

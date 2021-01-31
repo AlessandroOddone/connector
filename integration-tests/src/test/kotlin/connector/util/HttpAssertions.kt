@@ -1,6 +1,7 @@
 package connector.util
 
 import io.ktor.client.engine.mock.toByteArray
+import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpMethod
 import io.ktor.http.Url
@@ -23,7 +24,7 @@ fun HttpTestContext.assertHttpLogMatches(
 ) {
   if (logEntryMatchers.size != httpLog.size) {
     throw AssertionError(
-      "Expected ${logEntryMatchers.size} HTTP calls, but ${httpLog.size} were logged.\nHTTP log: $httpLog\n"
+      "Expected ${logEntryMatchers.size} HTTP requests, but ${httpLog.size} were logged."
     )
   }
   val errorsByIndex: List<List<String>> = logEntryMatchers.mapIndexed { index, matcher ->
@@ -32,15 +33,11 @@ fun HttpTestContext.assertHttpLogMatches(
   var errorMessage = ""
   errorsByIndex.forEachIndexed { index, errors ->
     if (errors.isNotEmpty()) {
-      if (errorMessage.isEmpty()) {
-        errorMessage += "HTTP calls with unexpected data were logged.\n"
-      }
-      errorMessage += "\nAt index $index:\n"
+      errorMessage += "\nHTTP log entry #${index + 1} (${httpLog[index]})\n"
       errorMessage += errors.joinToString(prefix = "- ", separator = "\n- ", postfix = "\n")
     }
   }
   if (errorMessage.isNotEmpty()) {
-    errorMessage += "\nHTTP log: $httpLog\n"
     throw AssertionError(errorMessage)
   }
 }
@@ -50,6 +47,7 @@ private fun HttpLogEntry.collectErrorMessages(matcher: HttpLogEntry.MatcherBuild
   var expectedMethod: HttpMethod? = null
   var expectedRequestHeaders: Headers? = null
   var expectedRequestBytes: ByteArray? = null
+  var expectedContentType: ContentType? = null
   matcher(
     object : HttpLogEntry.MatcherBuilder {
       override fun hasUrl(url: String) {
@@ -72,8 +70,9 @@ private fun HttpLogEntry.collectErrorMessages(matcher: HttpLogEntry.MatcherBuild
         expectedRequestHeaders = headers
       }
 
-      override fun hasRequestBody(bytes: ByteArray) {
+      override fun hasRequestBody(bytes: ByteArray, contentType: ContentType?) {
         expectedRequestBytes = bytes
+        expectedContentType = contentType
       }
     }
   )
@@ -106,6 +105,10 @@ private fun HttpLogEntry.collectErrorMessages(matcher: HttpLogEntry.MatcherBuild
         "Expected request body '${expectedRequestBytes!!.decodeToString()}', " +
           "but was '${actualRequestBytes.decodeToString()}'."
       )
+    }
+    val actualContentType = requestBody.contentType
+    if (actualContentType != expectedContentType) {
+      errorMessages.add("Expected Content-Type '$expectedContentType', but was '$actualContentType'.")
     }
   }
   return errorMessages

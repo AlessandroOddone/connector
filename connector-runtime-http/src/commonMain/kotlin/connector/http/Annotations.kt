@@ -55,5 +55,24 @@ public annotation class Header(val name: String)
 @Target(AnnotationTarget.VALUE_PARAMETER)
 public annotation class Body(val contentType: String)
 
+/**
+ * Forms
+ */
+
+@Target(AnnotationTarget.FUNCTION)
+public annotation class FormUrlEncoded
+
 @Target(AnnotationTarget.VALUE_PARAMETER)
-public annotation class JsonBody
+public annotation class Field(val name: String)
+
+@Target(AnnotationTarget.VALUE_PARAMETER)
+public annotation class FieldMap
+
+@Target(AnnotationTarget.FUNCTION)
+public annotation class Multipart
+
+@Target(AnnotationTarget.VALUE_PARAMETER)
+public annotation class Part(val name: String = "")
+
+@Target(AnnotationTarget.VALUE_PARAMETER)
+public annotation class PartMap

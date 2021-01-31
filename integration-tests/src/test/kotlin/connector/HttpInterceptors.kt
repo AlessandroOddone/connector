@@ -1,8 +1,8 @@
 package connector
 
+import connector.http.Body
 import connector.http.HttpInterceptor
 import connector.http.HttpResult
-import connector.http.JsonBody
 import connector.http.POST
 import connector.http.copy
 import connector.http.proceed
@@ -27,7 +27,7 @@ import kotlin.test.assertEquals
 private val BASE_URL = Url("https://interceptors/")
 
 @Service interface HttpInterceptorsTestService {
-  @POST("post") suspend fun post(@JsonBody request: String): String
+  @POST("post") suspend fun post(@Body("application/json") request: String): String
 }
 
 class HttpInterceptors {
@@ -59,7 +59,7 @@ class HttpInterceptors {
     assertHttpLogMatches {
       hasMethod(HttpMethod.Post)
       hasUrl("${BASE_URL}post")
-      hasRequestBody(text = "\"abcd\"")
+      hasRequestBody("\"abcd\"", ContentType.Application.Json)
     }
     assertEquals(
       listOf("first proceed", "second proceed", "second result", "first result"),
@@ -74,7 +74,7 @@ class HttpInterceptors {
           request.copy {
             method = HttpMethod.Put
             url.parameters.append("param", "value")
-            bodySupplier = { ByteArrayContent("true".toByteArray()) }
+            contentSupplier = { ByteArrayContent("text".toByteArray(), contentType = ContentType.Text.Plain) }
           }
         )
       }
@@ -93,7 +93,7 @@ class HttpInterceptors {
     assertHttpLogMatches {
       hasMethod(HttpMethod.Put)
       hasUrl("${BASE_URL}post?param=value")
-      hasRequestBody(text = "true")
+      hasRequestBody("text", ContentType.Text.Plain)
     }
   }
 

@@ -89,6 +89,40 @@ private val BASE_URL = Url("https://urls/base/")
     @Query("q") queryParam2: String,
   )
 
+  @GET("multiple/query/parameters/same/name?q=10")
+  suspend fun iterableOfStringQueryParametersWithSameName(@Query("q") q: Iterable<String>)
+
+  @GET("multiple/query/parameters/same/name?q=10")
+  suspend fun iterableOfAnyQueryParametersWithSameName(@Query("q") q: Iterable<Any>)
+
+  @GET("multiple/query/parameters/same/name?q=10")
+  suspend fun collectionOfStringQueryParametersWithSameName(@Query("q") q: Collection<Any>)
+
+  @GET("multiple/query/parameters/same/name?q=10")
+  suspend fun collectionOfAnyQueryParametersWithSameName(@Query("q") q: Collection<Any>)
+
+  @GET("multiple/query/parameters/same/name?q=10")
+  suspend fun listOfStringQueryParametersWithSameName(@Query("q") q: List<String>)
+
+  @GET("multiple/query/parameters/same/name?q=10")
+  suspend fun listOfAnyQueryParametersWithSameName(@Query("q") q: List<Any>)
+
+  @GET("multiple/query/parameters/same/name?q=10")
+  suspend fun setOfStringQueryParametersWithSameName(@Query("q") q: Set<String>)
+
+  @GET("multiple/query/parameters/same/name?q=10")
+  suspend fun setOfAnyQueryParametersWithSameName(@Query("q") q: Set<Any>)
+
+  @GET("multiple/query/parameters/same/name?q=10")
+  suspend fun queryParameterIterableNullableTypes(
+    @Query("q") q1: Iterable<String>?,
+    @Query("q") q2: Collection<Any>?,
+    @Query("q") q3: List<String?>,
+    @Query("q") q4: Set<Any?>,
+    @Query("q") q5: List<String?>?,
+    @Query("q") q6: Iterable<Any?>?,
+  )
+
   @GET("query/parameter/with/question/mark")
   suspend fun queryParameterWithQuestionMark(@Query("q?") queryParam: String)
 
@@ -517,5 +551,119 @@ class HttpUrls {
     assertHttpLogMatches {
       hasUrl("https://urls/base/\$pa%09th%08/%0Acont%0Daining'/%5Ca%22ll%22/%5Ces'cape\$/seq%08ue%0Dnces%09/%0A\$\$/")
     }
+  }
+
+  @Test fun `@Query iterables with non-null values`() = runHttpTest {
+    val service = HttpUrlsTestService(BASE_URL, httpClient)
+
+    // [10]
+    service.iterableOfStringQueryParametersWithSameName(emptyList())
+    // [10, 20, 30]
+    service.iterableOfStringQueryParametersWithSameName(listOf("20", "30"))
+    // [10]
+    service.iterableOfAnyQueryParametersWithSameName(emptyList())
+    // [10, 100]
+    service.iterableOfAnyQueryParametersWithSameName(
+      listOf(
+        object : Any() {
+          override fun toString() = "100"
+        },
+      )
+    )
+
+    // [10]
+    service.collectionOfStringQueryParametersWithSameName(emptyList())
+    // [10, 20, 30]
+    service.collectionOfStringQueryParametersWithSameName(listOf("20", "30"))
+    // [10]
+    service.collectionOfAnyQueryParametersWithSameName(emptyList())
+    // [10, 100]
+    service.collectionOfAnyQueryParametersWithSameName(
+      listOf(
+        object : Any() {
+          override fun toString() = "100"
+        },
+      )
+    )
+
+    // [10]
+    service.listOfStringQueryParametersWithSameName(emptyList())
+    // [10, 20, 30]
+    service.listOfStringQueryParametersWithSameName(listOf("20", "30"))
+    // [10]
+    service.listOfAnyQueryParametersWithSameName(emptyList())
+    // [10, 100]
+    service.listOfAnyQueryParametersWithSameName(
+      listOf(
+        object : Any() {
+          override fun toString() = "100"
+        },
+      )
+    )
+
+    // [10]
+    service.setOfStringQueryParametersWithSameName(emptySet())
+    // [10, 20, 30]
+    service.setOfStringQueryParametersWithSameName(setOf("20", "30"))
+    // [10]
+    service.setOfAnyQueryParametersWithSameName(emptySet())
+    // [10, 100]
+    service.setOfAnyQueryParametersWithSameName(
+      setOf(
+        object : Any() {
+          override fun toString() = "100"
+        },
+      )
+    )
+
+    assertHttpLogMatches(
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10") },
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=20&q=30") },
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10") },
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=100") },
+
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10") },
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=20&q=30") },
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10") },
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=100") },
+
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10") },
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=20&q=30") },
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10") },
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=100") },
+
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10") },
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=20&q=30") },
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10") },
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=100") },
+    )
+  }
+
+  @Test fun `@Query iterables with nullable values`() = runHttpTest {
+    val service = HttpUrlsTestService(BASE_URL, httpClient)
+
+    // [10]
+    service.queryParameterIterableNullableTypes(
+      null,
+      null,
+      listOf(null),
+      setOf(null),
+      null,
+      null
+    )
+    // [10, 20, 30, 40, 50, 60, 70]
+    service.queryParameterIterableNullableTypes(
+      null,
+      null,
+      listOf("20", "30"),
+      setOf(null, "40"),
+      listOf("50", null, "60"),
+      setOf(null, "70", null)
+    )
+
+    assertHttpLogMatches(
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10") },
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=20&q=30&q=40&q=50&q=60&q=70") },
+    )
   }
 }

@@ -5,6 +5,11 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandler
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.features.logging.LogLevel
+import io.ktor.client.features.logging.Logger
+import io.ktor.client.features.logging.Logging
+import io.ktor.client.features.logging.SIMPLE
+import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpMethod
 import io.ktor.http.Url
@@ -30,6 +35,10 @@ fun runHttpTest(block: suspend HttpTestContext.() -> Unit) = runTest {
               )
             }
           }
+        }
+        install(Logging) {
+          logger = Logger.SIMPLE
+          level = LogLevel.ALL
         }
       }
 
@@ -60,12 +69,14 @@ data class HttpLogEntry(
     fun hasMethod(method: HttpMethod)
     fun hasMethod(method: String)
     fun hasRequestHeaders(headers: Headers)
-    fun hasRequestBody(bytes: ByteArray)
+    fun hasRequestBody(bytes: ByteArray, contentType: ContentType?)
   }
 
   override fun toString(): String = "${method.value} $url"
 }
 
-fun HttpLogEntry.MatcherBuilder.hasRequestBody(text: String) = hasRequestBody(text.encodeToByteArray())
+fun HttpLogEntry.MatcherBuilder.hasRequestBody(text: String, contentType: ContentType) {
+  return hasRequestBody(text.encodeToByteArray(), contentType)
+}
 
 private val defaultMockHttpRequestHandler: MockRequestHandler = { respond(ByteReadChannel.Empty) }

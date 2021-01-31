@@ -12,13 +12,16 @@ import com.google.devtools.ksp.symbol.KSTypeArgument
 import com.google.devtools.ksp.symbol.KSValueParameter
 import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.symbol.Nullability
+import com.squareup.kotlinpoet.ParameterizedTypeName
 import com.squareup.kotlinpoet.STAR
+import com.squareup.kotlinpoet.STRING
 import com.squareup.kotlinpoet.TypeName
 import connector.codegen.ServiceDescription
 import connector.codegen.StringValue
 import connector.codegen.UrlType
 import connector.processor.util.OnTypeArgumentResolvedListener
 import connector.processor.util.className
+import connector.processor.util.classNameOrNull
 import connector.processor.util.isInterface
 import connector.processor.util.isTopLevel
 import connector.processor.util.packageName
@@ -64,7 +67,11 @@ public class ServiceParser(private val logger: KSPLogger) {
       logger.error("All functions in @Service interfaces must be annotated with an HTTP method.", this)
     }
     if (httpMethodAnnotations.size > 1) {
-      logger.error("Multiple HTTP method annotations are not allowed.", this)
+      logger.error(
+        "Multiple HTTP method annotations are not allowed. " +
+          "Found: ${httpMethodAnnotations.joinToString { it.name }}",
+        this
+      )
     }
     if (!modifiers.contains(Modifier.SUSPEND)) {
       logger.error("All functions in @Service interfaces must be suspension functions.", this)
@@ -76,11 +83,47 @@ public class ServiceParser(private val logger: KSPLogger) {
       logger.error("Functions with type parameters are not allowed in @Service interfaces.", this)
     }
 
+    val httpFormEncodingAnnotations = findHttpFormEncodingAnnotations()
+    if (httpFormEncodingAnnotations.size > 1) {
+      logger.error(
+        "Multiple HTTP form encoding annotations are not allowed. " +
+          "Found: ${httpFormEncodingAnnotations.joinToString { it.annotation.shortName.asString() }}",
+        this
+      )
+    }
+    val isFormUrlEncoded = httpFormEncodingAnnotations.any { it is HttpFormEncodingAnnotation.FormUrlEncoded }
+    val isMultipart = httpFormEncodingAnnotations.any { it is HttpFormEncodingAnnotation.Multipart }
+    if (isFormUrlEncoded) {
+      httpMethodAnnotations.forEach { httpMethodAnnotation ->
+        if (!httpMethodAnnotation.isBodyAllowed) {
+          logger.error(
+            "@FormUrlEncoded can only be used with HTTP methods that allow a request body, " +
+              "but found method: ${httpMethodAnnotation.method}",
+            this
+          )
+        }
+      }
+    }
+    if (isMultipart) {
+      httpMethodAnnotations.forEach { httpMethodAnnotation ->
+        if (!httpMethodAnnotation.isBodyAllowed) {
+          logger.error(
+            "@Multipart can only be used with HTTP methods that allow a request body, " +
+              "but found method: ${httpMethodAnnotation.method}",
+            this
+          )
+        }
+      }
+    }
+
     val allParameterAnnotations = parameters
       .flatMap { parameter ->
         val parameterAnnotations = parameter.findHttpParameterAnnotations()
         if (parameterAnnotations.isEmpty()) {
-          logger.error("Function parameter must have a valid connector annotation.", parameter)
+          logger.error(
+            "All parameters in a @Service function must have an appropriate connector annotation.",
+            parameter
+          )
         }
         if (parameterAnnotations.size > 1) {
           logger.error(
@@ -114,6 +157,64 @@ public class ServiceParser(private val logger: KSPLogger) {
           )
         }
       }
+      if (isFormUrlEncoded) {
+        logger.error(
+          "@Body is not allowed in @FormUrlEncoded requests.",
+          bodyAnnotation.annotation
+        )
+      }
+      if (isMultipart) {
+        logger.error(
+          "@Body is not allowed in @Multipart requests.",
+          bodyAnnotation.annotation
+        )
+      }
+    }
+
+    val fieldAnnotations = allParameterAnnotations.filterIsInstance<HttpParameterAnnotation.Field>()
+    val fieldMapAnnotations = allParameterAnnotations.filterIsInstance<HttpParameterAnnotation.FieldMap>()
+    if (!isFormUrlEncoded) {
+      fieldAnnotations.forEach { fieldAnnotation ->
+        logger.error(
+          "@Field can only be used in @FormUrlEncoded requests.",
+          fieldAnnotation.annotation
+        )
+      }
+      fieldMapAnnotations.forEach { fieldMapAnnotation ->
+        logger.error(
+          "@FieldMap can only be used in @FormUrlEncoded requests.",
+          fieldMapAnnotation.annotation
+        )
+      }
+    }
+    if (isFormUrlEncoded && fieldAnnotations.isEmpty() && fieldMapAnnotations.isEmpty()) {
+      logger.error(
+        "@FormUrlEncoded functions must have at least one @Field or @FieldMap parameter.",
+        this
+      )
+    }
+
+    val partAnnotations = allParameterAnnotations.filterIsInstance<HttpParameterAnnotation.Part>()
+    val partMapAnnotations = allParameterAnnotations.filterIsInstance<HttpParameterAnnotation.PartMap>()
+    if (!isMultipart) {
+      partAnnotations.forEach { partAnnotation ->
+        logger.error(
+          "@Part can only be used in @Multipart requests.",
+          partAnnotation.annotation
+        )
+      }
+      partMapAnnotations.forEach { partMapAnnotation ->
+        logger.error(
+          "@PartMap can only be used in @Multipart requests.",
+          partMapAnnotation.annotation
+        )
+      }
+    }
+    if (isMultipart && partAnnotations.isEmpty() && partMapAnnotations.isEmpty()) {
+      logger.error(
+        "@Multipart functions must have at least one @Part or @PartMap parameter.",
+        this
+      )
     }
 
     val urlAnnotations = allParameterAnnotations.filterIsInstance<HttpParameterAnnotation.Url>()
@@ -216,7 +317,7 @@ public class ServiceParser(private val logger: KSPLogger) {
         ServiceDescription.Url.Template(
           value = httpMethodAnnotation.urlTemplate,
           type = httpMethodAnnotation.urlTemplate.urlType(httpMethodAnnotation.annotation),
-          parameterNameReplacementMappings = parameterNameReplacementMappings,
+          replaceBlockToParameterMap = parameterNameReplacementMappings,
           dynamicQueryParameters = dynamicQueryParameters
         )
       } else {
@@ -257,11 +358,36 @@ public class ServiceParser(private val logger: KSPLogger) {
         val typeName = if (httpParameterAnnotation is HttpParameterAnnotation.Body) {
           parameterType.typeNameWithValidation(
             node = httpParameterAnnotation.annotation,
-            validationType = TypeNameValidationType.HTTP_BODY_ANNOTATED
+            validation = SerializableTypeValidation.HTTP_BODY_ANNOTATED
           )
         } else {
           parameterType.typeName()
         }
+
+        if (
+          httpParameterAnnotation is HttpParameterAnnotation.FieldMap ||
+          httpParameterAnnotation is HttpParameterAnnotation.PartMap
+        ) {
+          val annotationName = httpParameterAnnotation.annotation.shortName.asString()
+          val qualifiedName = parameterType.declaration.qualifiedName?.asString()
+          if (qualifiedName == "kotlin.collections.Map") {
+            (typeName as? ParameterizedTypeName)?.run {
+              val keyTypeClassName = typeArguments.getOrNull(0)?.classNameOrNull()
+              if (keyTypeClassName != STRING) {
+                logger.error(
+                  "@$annotationName keys must be of type '$STRING'.",
+                  httpParameterAnnotation.annotation
+                )
+              }
+            }
+          } else if (qualifiedName != "io.ktor.util.StringValues") {
+            logger.error(
+              "@$annotationName parameter type must be either 'kotlin.collections.Map' or 'io.ktor.util.StringValues'.",
+              httpParameterAnnotation.annotation
+            )
+          }
+        }
+
         if (parameterName != null && typeName != null) {
           parameterName to typeName
         } else {
@@ -302,14 +428,29 @@ public class ServiceParser(private val logger: KSPLogger) {
 
     val bodyParameterName = bodyAnnotations.getOrNull(0)?.parameter?.name?.asString()
     val bodyContentType = bodyAnnotations.getOrNull(0)?.contentType
-    val requestBody = if (bodyParameterName != null && bodyContentType != null) {
-      ServiceDescription.HttpRequestBody(parameterName = bodyParameterName, contentType = bodyContentType)
-    } else {
-      null
+
+    fun content(): ServiceDescription.HttpContent? = when {
+      bodyParameterName != null && bodyContentType != null -> ServiceDescription.HttpContent.Body(
+        parameterName = bodyParameterName,
+        contentType = bodyContentType
+      )
+
+      fieldAnnotations.isNotEmpty() || fieldMapAnnotations.isNotEmpty() -> {
+        ServiceDescription.HttpContent.FormUrlEncoded(
+          parameterToFieldNameMap = fieldAnnotations.associate { fieldAnnotation ->
+            (fieldAnnotation.parameter.name?.asString() ?: return null) to fieldAnnotation.name
+          },
+          fieldMapParameterNames = fieldMapAnnotations.map { fieldAnnotation ->
+            fieldAnnotation.parameter.name?.asString() ?: return null
+          }
+        )
+      }
+
+      else -> null
     }
 
     val returnType = returnType?.resolve()
-    val returnTypeName = returnType?.typeNameWithValidation(this, TypeNameValidationType.HTTP_FUNCTION_RETURN)
+    val returnTypeName = returnType?.typeNameWithValidation(this, SerializableTypeValidation.HTTP_FUNCTION_RETURN)
 
     if (
       httpMethodAnnotation == null ||
@@ -326,7 +467,7 @@ public class ServiceParser(private val logger: KSPLogger) {
       method = httpMethodAnnotation.method,
       url = url,
       headers = headers,
-      requestBody = requestBody,
+      content = content(),
       returnType = returnTypeName
     )
   }
@@ -339,7 +480,11 @@ public class ServiceParser(private val logger: KSPLogger) {
         "HTTP" -> annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
         else -> return@mapNotNull null
       }
-      val isBodyAllowed = method != "DELETE" && method != "GET" && method != "HEAD" && method != "OPTIONS"
+      val isBodyAllowed = annotationName != "DELETE" &&
+        annotationName != "GET" &&
+        annotationName != "HEAD" &&
+        annotationName != "OPTIONS"
+
       val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
 
       val urlTemplateArgumentIndex = if (annotationName == "HTTP") 1 else 0
@@ -354,6 +499,20 @@ public class ServiceParser(private val logger: KSPLogger) {
         name = annotationName,
         urlTemplate = urlTemplate
       )
+    }
+  }
+
+  private fun KSFunctionDeclaration.findHttpFormEncodingAnnotations(): List<HttpFormEncodingAnnotation> {
+    return annotations.mapNotNull { annotation ->
+      when (annotation.shortName.asString()) {
+        "FormUrlEncoded" -> annotation.resolveConnectorHttpAnnotation()?.let { type ->
+          HttpFormEncodingAnnotation.FormUrlEncoded(annotation, type)
+        }
+        "Multipart" -> annotation.resolveConnectorHttpAnnotation()?.let { type ->
+          HttpFormEncodingAnnotation.Multipart(annotation, type)
+        }
+        else -> null
+      }
     }
   }
 
@@ -409,15 +568,6 @@ public class ServiceParser(private val logger: KSPLogger) {
             annotationType = resolvedAnnotationType
           )
         }
-        "JsonBody" -> {
-          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-          HttpParameterAnnotation.Body(
-            contentType = ContentType.Application.Json.toString(),
-            parameter = this,
-            annotation = annotation,
-            annotationType = resolvedAnnotationType
-          )
-        }
         "Header" -> {
           val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
           val name = annotation.arguments.getOrNull(0)?.value ?: return@mapNotNull null
@@ -456,12 +606,46 @@ public class ServiceParser(private val logger: KSPLogger) {
             annotationType = resolvedAnnotationType
           )
         }
+        "Field" -> {
+          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+          val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
+          HttpParameterAnnotation.Field(
+            name = name,
+            parameter = this,
+            annotation = annotation,
+            annotationType = resolvedAnnotationType
+          )
+        }
+        "FieldMap" -> {
+          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+          HttpParameterAnnotation.FieldMap(
+            parameter = this,
+            annotation = annotation,
+            annotationType = resolvedAnnotationType
+          )
+        }
+        "Part" -> {
+          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+          HttpParameterAnnotation.Part(
+            parameter = this,
+            annotation = annotation,
+            annotationType = resolvedAnnotationType
+          )
+        }
+        "PartMap" -> {
+          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+          HttpParameterAnnotation.PartMap(
+            parameter = this,
+            annotation = annotation,
+            annotationType = resolvedAnnotationType
+          )
+        }
         else -> null
       }
     }
   }
 
-  private enum class TypeNameValidationType(
+  private enum class SerializableTypeValidation(
     val nonSerializableAllowedCanonicalNames: List<String>,
     val nullNotAllowedCanonicalNames: List<String>
   ) {
@@ -480,7 +664,7 @@ public class ServiceParser(private val logger: KSPLogger) {
 
   private fun KSType.typeNameWithValidation(
     node: KSNode,
-    validationType: TypeNameValidationType
+    validation: SerializableTypeValidation
   ): TypeName? {
     fun KSDeclaration.isSerializable(): Boolean {
       val qualifiedName = qualifiedName?.asString() ?: return false
@@ -494,17 +678,17 @@ public class ServiceParser(private val logger: KSPLogger) {
     val qualifiedOrSimpleName = (declaration.qualifiedName ?: declaration.simpleName).asString()
 
     if (
-      !validationType.nonSerializableAllowedCanonicalNames.contains(qualifiedOrSimpleName) &&
+      !validation.nonSerializableAllowedCanonicalNames.contains(qualifiedOrSimpleName) &&
       !declaration.isSerializable()
     ) {
-      val errorSubject = when (validationType) {
-        TypeNameValidationType.HTTP_BODY_ANNOTATED -> "@Body type"
-        TypeNameValidationType.HTTP_FUNCTION_RETURN -> "return type"
+      val errorSubject = when (validation) {
+        SerializableTypeValidation.HTTP_BODY_ANNOTATED -> "@Body type"
+        SerializableTypeValidation.HTTP_FUNCTION_RETURN -> "return type"
       }
 
       logger.error(
         "Invalid $errorSubject: '$qualifiedOrSimpleName'. Expected either a @Serializable type, " +
-          "${validationType.nonSerializableAllowedCanonicalNames.joinToString()}, " +
+          "${validation.nonSerializableAllowedCanonicalNames.joinToString()}, " +
           "or a built-in serializable type (${BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.joinToString()})",
         node
       )
@@ -512,11 +696,11 @@ public class ServiceParser(private val logger: KSPLogger) {
 
     if (
       nullability == Nullability.NULLABLE &&
-      validationType.nullNotAllowedCanonicalNames.contains(qualifiedOrSimpleName)
+      validation.nullNotAllowedCanonicalNames.contains(qualifiedOrSimpleName)
     ) {
-      val errorSubject = when (validationType) {
-        TypeNameValidationType.HTTP_BODY_ANNOTATED -> "@Body type"
-        TypeNameValidationType.HTTP_FUNCTION_RETURN -> "return type"
+      val errorSubject = when (validation) {
+        SerializableTypeValidation.HTTP_BODY_ANNOTATED -> "@Body type"
+        SerializableTypeValidation.HTTP_FUNCTION_RETURN -> "return type"
       }
       logger.error(
         "Nullable '$qualifiedOrSimpleName' is not allowed as the $errorSubject. Must be non-null.",
@@ -626,6 +810,21 @@ private data class HttpMethodAnnotation(
   val urlTemplate: String?
 )
 
+private sealed class HttpFormEncodingAnnotation {
+  abstract val annotation: KSAnnotation
+  abstract val annotationType: KSType
+
+  data class FormUrlEncoded(
+    override val annotation: KSAnnotation,
+    override val annotationType: KSType
+  ) : HttpFormEncodingAnnotation()
+
+  data class Multipart(
+    override val annotation: KSAnnotation,
+    override val annotationType: KSType
+  ) : HttpFormEncodingAnnotation()
+}
+
 private sealed class HttpParameterAnnotation {
   abstract val parameter: KSValueParameter
   abstract val annotation: KSAnnotation
@@ -660,6 +859,31 @@ private sealed class HttpParameterAnnotation {
   ) : HttpParameterAnnotation()
 
   data class Url(
+    override val parameter: KSValueParameter,
+    override val annotation: KSAnnotation,
+    override val annotationType: KSType
+  ) : HttpParameterAnnotation()
+
+  data class Field(
+    val name: String,
+    override val parameter: KSValueParameter,
+    override val annotation: KSAnnotation,
+    override val annotationType: KSType
+  ) : HttpParameterAnnotation()
+
+  data class FieldMap(
+    override val parameter: KSValueParameter,
+    override val annotation: KSAnnotation,
+    override val annotationType: KSType
+  ) : HttpParameterAnnotation()
+
+  data class Part(
+    override val parameter: KSValueParameter,
+    override val annotation: KSAnnotation,
+    override val annotationType: KSType
+  ) : HttpParameterAnnotation()
+
+  data class PartMap(
     override val parameter: KSValueParameter,
     override val annotation: KSAnnotation,
     override val annotationType: KSType
