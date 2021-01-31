@@ -28,7 +28,7 @@ import connector.codegen.util.escape
 import connector.codegen.util.noBreakingSpaces
 import connector.codegen.util.nonNull
 import connector.http.HttpBody
-import connector.http.HttpBodySerializer
+import connector.http.HttpContentSerializer
 import connector.http.HttpInterceptor
 import connector.http.HttpRequest
 import connector.http.HttpResponse
@@ -47,10 +47,6 @@ import io.ktor.http.URLProtocol
 import io.ktor.http.Url
 import io.ktor.util.StringValues
 import io.ktor.utils.io.ByteReadChannel
-import kotlinx.coroutines.CoroutineExceptionHandler
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 
 public fun ServiceDescription.toFileSpec(): FileSpec = ServiceCodeGenerator(this).run()
 
@@ -91,8 +87,8 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
 
     val httpBodySerializersParameter = ParameterSpec
       .builder(
-        ParameterNames.HTTP_BODY_SERIALIZERS,
-        LIST.plusParameter(ClassNames.HTTP_BODY_SERIALIZER)
+        ParameterNames.HTTP_CONTENT_SERIALIZERS,
+        LIST.plusParameter(ClassNames.HTTP_CONTENT_SERIALIZER)
       )
       .defaultValue("emptyList()")
       .build()
@@ -129,7 +125,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
             """.trimIndent(),
             ParameterNames.BASE_URL,
             ParameterNames.HTTP_CLIENT,
-            ParameterNames.HTTP_BODY_SERIALIZERS,
+            ParameterNames.HTTP_CONTENT_SERIALIZERS,
             ParameterNames.HTTP_INTERCEPTORS
           )
         }
@@ -146,8 +142,8 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           .addParameter(ParameterNames.BASE_URL, ClassNames.Ktor.URL)
           .addParameter(ParameterNames.HTTP_CLIENT, ClassNames.HTTP_CLIENT)
           .addParameter(
-            ParameterNames.HTTP_BODY_SERIALIZERS,
-            LIST.plusParameter(ClassNames.HTTP_BODY_SERIALIZER)
+            ParameterNames.HTTP_CONTENT_SERIALIZERS,
+            LIST.plusParameter(ClassNames.HTTP_CONTENT_SERIALIZER)
           )
           .addParameter(
             ParameterNames.HTTP_INTERCEPTORS,
@@ -170,11 +166,11 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       .addProperty(
         PropertySpec
           .builder(
-            ParameterNames.HTTP_BODY_SERIALIZERS,
-            LIST.plusParameter(ClassNames.HTTP_BODY_SERIALIZER),
+            ParameterNames.HTTP_CONTENT_SERIALIZERS,
+            LIST.plusParameter(ClassNames.HTTP_CONTENT_SERIALIZER),
             KModifier.PRIVATE
           )
-          .initializer(ParameterNames.HTTP_BODY_SERIALIZERS)
+          .initializer(ParameterNames.HTTP_CONTENT_SERIALIZERS)
           .build()
       )
       .addProperty(
@@ -548,9 +544,9 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       }
     }
 
-    fun bodyAsyncVariable(variableName: String) = buildCodeBlock {
+    fun requestBodyVariable(variableName: String) = buildCodeBlock {
       content as ServiceDescription.HttpContent.Body
-      add("val·$variableName·=·")
+      beginControlFlow("val·$variableName·by·lazy")
 
       val typeName = parameters.getValue(content.parameterName)
       val className = typeName.classNameOrNull()
@@ -561,23 +557,12 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         beginControlFlow("${content.parameterName}?.let")
       }
 
-      add("%T.%M(\n", ClassNames.GLOBAL_SCOPE, MemberName("kotlinx.coroutines", "async"))
-      indent()
-      add(
-        "%T.Unconfined·+·%T·{·_,·_·->·/*·ignored·*/·},\n",
-        ClassNames.DISPATCHERS,
-        ClassNames.COROUTINE_EXCEPTION_HANDLER
-      )
-      add("%T.LAZY\n", ClassNames.COROUTINE_START)
-      unindent()
-      beginControlFlow(")")
-
       val contentTypeVariableName = variableName("contentType")
       add(contentTypeVariable(contentTypeVariableName))
 
       add(
         "%L.%M($contentTypeVariableName).write(\n",
-        classProperty(ParameterNames.HTTP_BODY_SERIALIZERS, isNestedThis = true),
+        classProperty(ParameterNames.HTTP_CONTENT_SERIALIZERS, isNestedThis = true),
         MemberName(packageName, FunctionNames.FIRST_WRITER_OF)
       )
       indent()
@@ -607,6 +592,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       if (isOptional) {
         endControlFlow()
       }
+
       endControlFlow()
     }
 
@@ -757,7 +743,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       variableName: String,
       urlBuilderVariableName: String,
       headersVariableName: String?,
-      contentSupplierExpression: CodeBlock? = null
+      bodySupplierExpression: CodeBlock? = null
     ) = buildCodeBlock {
       add("val·$variableName·=·%T(\n", ClassNames.HTTP_REQUEST)
       indent()
@@ -784,9 +770,9 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         add("headers·=·$headersVariableName")
       }
 
-      if (contentSupplierExpression != null) {
+      if (bodySupplierExpression != null) {
         add(",\n")
-        add("contentSupplier·=·%L", contentSupplierExpression)
+        add("bodySupplier·=·%L", bodySupplierExpression)
       } else {
         add("\n")
       }
@@ -883,7 +869,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
             }
             else -> if (isReturnNeeded) "return·" else ""
           },
-          classProperty(ParameterNames.HTTP_BODY_SERIALIZERS, isNestedThis = true),
+          classProperty(ParameterNames.HTTP_CONTENT_SERIALIZERS, isNestedThis = true),
           MemberName(packageName, FunctionNames.FIRST_READER_OF),
           contentTypeVariableName
         )
@@ -969,8 +955,8 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
     return buildCodeBlock {
       val urlBuilderVariableName = variableName("urlBuilder")
       val headersVariableName = if (headers.isNotEmpty()) variableName("headers") else null
-      val bodyAsyncVariableName = if (content is ServiceDescription.HttpContent.Body) {
-        variableName("requestBodyAsync")
+      val requestBodyVariableName = if (content is ServiceDescription.HttpContent.Body) {
+        variableName("requestBody")
       } else {
         null
       }
@@ -989,8 +975,8 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         add(headersVariable(variableName = headersVariableName))
       }
 
-      if (bodyAsyncVariableName != null) {
-        add(bodyAsyncVariable(variableName = bodyAsyncVariableName))
+      if (requestBodyVariableName != null) {
+        add(requestBodyVariable(variableName = requestBodyVariableName))
       }
 
       if (formUrlEncodedParametersBuilderVariableName != null) {
@@ -1001,25 +987,22 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         )
       }
 
-      val contentSupplierExpression = when {
-        bodyAsyncVariableName != null -> buildCodeBlock {
+      val bodySupplierExpression = when {
+        requestBodyVariableName != null -> buildCodeBlock {
           content as ServiceDescription.HttpContent.Body
           val typeName = parameters.getValue(content.parameterName)
           val className = typeName.classNameOrNull()
           val isHttpBodyClass = className?.nonNull() == ClassNames.HTTP_BODY
           val isOptional = isHttpBodyClass && typeName.isNullable
 
-          if (isOptional) {
-            beginControlFlow("if·($bodyAsyncVariableName·==·null)")
-            addStatement("{ %T }", ClassNames.Ktor.EMPTY_CONTENT)
-            nextControlFlow("else")
-          }
-
-          addStatement("{ $bodyAsyncVariableName.await() }")
-
-          if (isOptional) {
-            endControlFlow()
-          }
+          addStatement(
+            "{·$requestBodyVariableName%L·}",
+            if (isOptional) {
+              buildCodeBlock { add(" ?:·%T", ClassNames.Ktor.EMPTY_CONTENT) }
+            } else {
+              ""
+            }
+          )
         }
 
         formUrlEncodedParametersBuilderVariableName != null -> buildCodeBlock {
@@ -1038,7 +1021,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           variableName = requestVariableName,
           urlBuilderVariableName = urlBuilderVariableName,
           headersVariableName = headersVariableName,
-          contentSupplierExpression = contentSupplierExpression
+          bodySupplierExpression = bodySupplierExpression
         )
       )
 
@@ -1170,7 +1153,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         return·$clientParameterName.%M {
           method·=·this@${FunctionNames.TO_HTTP_STATEMENT}.method
           url.%M(this@toHttpStatement.url)
-          body·=·contentSupplier()
+          body·=·bodySupplier()
           headers.appendAll(this@${FunctionNames.TO_HTTP_STATEMENT}.headers)
         }
         """.trimIndent(),
@@ -1220,21 +1203,21 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
     FunSpec.builder(FunctionNames.FIRST_WRITER_OF)
       .addAnnotation(suppressNothingToInlineAnnotationSpec)
       .addModifiers(KModifier.PRIVATE, KModifier.INLINE)
-      .receiver(LIST.plusParameter(ClassNames.HTTP_BODY_SERIALIZER))
+      .receiver(LIST.plusParameter(ClassNames.HTTP_CONTENT_SERIALIZER))
       .addParameter(
         ParameterSpec(
           contentTypeParameterName,
           ClassNames.Ktor.CONTENT_TYPE
         )
       )
-      .returns(ClassNames.HTTP_BODY_SERIALIZER)
+      .returns(ClassNames.HTTP_CONTENT_SERIALIZER)
       .addCode(
         buildCodeBlock {
           add("return·find·{·it.canWrite($contentTypeParameterName)·}·?:·error(\n")
           indent()
           add(
             "\"No·suitable·%L·found·for·writing·Content-Type:·'$$contentTypeParameterName'\"\n",
-            ClassNames.HTTP_BODY_SERIALIZER.simpleName
+            ClassNames.HTTP_CONTENT_SERIALIZER.simpleName
           )
           unindent()
           add(")\n")
@@ -1248,21 +1231,21 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
     FunSpec.builder(FunctionNames.FIRST_READER_OF)
       .addAnnotation(suppressNothingToInlineAnnotationSpec)
       .addModifiers(KModifier.PRIVATE, KModifier.INLINE)
-      .receiver(LIST.plusParameter(ClassNames.HTTP_BODY_SERIALIZER))
+      .receiver(LIST.plusParameter(ClassNames.HTTP_CONTENT_SERIALIZER))
       .addParameter(
         ParameterSpec(
           contentTypeParameterName,
           ClassNames.Ktor.CONTENT_TYPE.copy(nullable = true)
         )
       )
-      .returns(ClassNames.HTTP_BODY_SERIALIZER)
+      .returns(ClassNames.HTTP_CONTENT_SERIALIZER)
       .addCode(
         buildCodeBlock {
           add("return·find·{·it.canRead($contentTypeParameterName)·}·?:·error(\n")
           indent()
           add(
             "\"No·suitable·%L·found·for·reading·Content-Type:·'$$contentTypeParameterName'\"\n",
-            ClassNames.HTTP_BODY_SERIALIZER.simpleName
+            ClassNames.HTTP_CONTENT_SERIALIZER.simpleName
           )
           unindent()
           add(")\n")
@@ -1578,12 +1561,8 @@ private object ClassNames {
     val URL_BUILDER = URLBuilder::class.asClassName()
   }
 
-  val COROUTINE_EXCEPTION_HANDLER = CoroutineExceptionHandler::class.asClassName()
-  val COROUTINE_START = CoroutineStart::class.asClassName()
-  val DISPATCHERS = Dispatchers::class.asClassName()
-  val GLOBAL_SCOPE = GlobalScope::class.asClassName()
   val HTTP_BODY = HttpBody::class.asClassName()
-  val HTTP_BODY_SERIALIZER = HttpBodySerializer::class.asClassName()
+  val HTTP_CONTENT_SERIALIZER = HttpContentSerializer::class.asClassName()
   val HTTP_CLIENT = HttpClient::class.asClassName()
   val HTTP_INTERCEPTOR = HttpInterceptor::class.asClassName()
   val HTTP_INTERCEPTOR_CONTEXT = HttpInterceptor.Context::class.asClassName()
@@ -1601,7 +1580,7 @@ private object ParameterNames {
   const val BASE_URL = "baseUrl"
   const val DYNAMIC_URL = "dynamicUrl"
   const val HTTP_CLIENT = "httpClient"
-  const val HTTP_BODY_SERIALIZERS = "httpBodySerializers"
+  const val HTTP_CONTENT_SERIALIZERS = "httpContentSerializers"
   const val HTTP_INTERCEPTORS = "httpInterceptors"
 }
 

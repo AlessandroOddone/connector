@@ -1,6 +1,6 @@
 package connector.util
 
-import connector.http.HttpBodySerializer
+import connector.http.HttpContentSerializer
 import io.ktor.http.ContentType
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.content.TextContent
@@ -10,14 +10,14 @@ import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.json.Json
 
-object JsonBodySerializer : HttpBodySerializer {
+object JsonContentSerializer : HttpContentSerializer {
   private val json = Json.Default
 
   override fun canWrite(contentType: ContentType) = contentType == ContentType.Application.Json
 
   override fun canRead(contentType: ContentType?) = contentType == ContentType.Application.Json
 
-  override suspend fun <T> write(
+  override fun <T> write(
     serializationStrategy: SerializationStrategy<T>,
     content: T,
     contentType: ContentType

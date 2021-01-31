@@ -7,7 +7,7 @@ import connector.http.POST
 import connector.http.copy
 import connector.http.proceed
 import connector.http.success
-import connector.util.JsonBodySerializer
+import connector.util.JsonContentSerializer
 import connector.util.assertHttpLogMatches
 import connector.util.hasRequestBody
 import connector.util.respondJson
@@ -46,7 +46,7 @@ class HttpInterceptors {
     val service = HttpInterceptorsTestService(
       BASE_URL,
       httpClient,
-      httpBodySerializers = listOf(JsonBodySerializer),
+      httpContentSerializers = listOf(JsonContentSerializer),
       httpInterceptors = listOf(
         createInterceptor("first"),
         createInterceptor("second")
@@ -74,7 +74,7 @@ class HttpInterceptors {
           request.copy {
             method = HttpMethod.Put
             url.parameters.append("param", "value")
-            contentSupplier = { ByteArrayContent("text".toByteArray(), contentType = ContentType.Text.Plain) }
+            bodySupplier = { ByteArrayContent("text".toByteArray(), contentType = ContentType.Text.Plain) }
           }
         )
       }
@@ -83,7 +83,7 @@ class HttpInterceptors {
     val service = HttpInterceptorsTestService(
       BASE_URL,
       httpClient,
-      httpBodySerializers = listOf(JsonBodySerializer),
+      httpContentSerializers = listOf(JsonContentSerializer),
       httpInterceptors = listOf(interceptor)
     )
 
@@ -113,7 +113,7 @@ class HttpInterceptors {
     val service = HttpInterceptorsTestService(
       BASE_URL,
       httpClient,
-      httpBodySerializers = listOf(JsonBodySerializer),
+      httpContentSerializers = listOf(JsonContentSerializer),
       httpInterceptors = listOf(interceptor)
     )
 
