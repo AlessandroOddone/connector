@@ -302,6 +302,12 @@ public class ServiceParser(private val logger: KSPLogger) {
       }
       .toList()
 
+    val queryMapParameterNames = allParameterAnnotations
+      .asSequence()
+      .filterIsInstance<HttpParameterAnnotation.QueryMap>()
+      .mapNotNull { it.parameter.name?.asString() }
+      .toList()
+
     val httpMethodAnnotation = httpMethodAnnotations.firstOrNull()
     val url = httpMethodAnnotation?.let {
       if (httpMethodAnnotation.urlTemplate != null) {
@@ -318,13 +324,15 @@ public class ServiceParser(private val logger: KSPLogger) {
           value = httpMethodAnnotation.urlTemplate,
           type = httpMethodAnnotation.urlTemplate.urlType(httpMethodAnnotation.annotation),
           replaceBlockToParameterMap = parameterNameReplacementMappings,
-          dynamicQueryParameters = dynamicQueryParameters
+          dynamicQueryParameters = dynamicQueryParameters,
+          queryMapParameterNames = queryMapParameterNames
         )
       } else {
         urlAnnotations.firstOrNull()?.parameter?.name?.asString()?.let { parameterName ->
           ServiceDescription.Url.Dynamic(
             parameterName = parameterName,
-            dynamicQueryParameters = dynamicQueryParameters
+            dynamicQueryParameters = dynamicQueryParameters,
+            queryMapParameterNames = queryMapParameterNames
           )
         }
       }
@@ -366,7 +374,9 @@ public class ServiceParser(private val logger: KSPLogger) {
 
         if (
           httpParameterAnnotation is HttpParameterAnnotation.FieldMap ||
-          httpParameterAnnotation is HttpParameterAnnotation.PartMap
+          httpParameterAnnotation is HttpParameterAnnotation.HeaderMap ||
+          httpParameterAnnotation is HttpParameterAnnotation.PartMap ||
+          httpParameterAnnotation is HttpParameterAnnotation.QueryMap
         ) {
           val annotationName = httpParameterAnnotation.annotation.shortName.asString()
           val qualifiedName = parameterType.declaration.qualifiedName?.asString()
@@ -408,7 +418,7 @@ public class ServiceParser(private val logger: KSPLogger) {
           val headerName = headerAnnotation.name
           if (headerName == HttpHeaders.ContentType) {
             logger.error(
-              "${HttpHeaders.ContentType} header cannot be defined via @Header, but only via @Body.",
+              "${HttpHeaders.ContentType} header cannot be defined via @Header.",
               headerAnnotation.annotation
             )
             return@mapNotNull null
@@ -425,6 +435,12 @@ public class ServiceParser(private val logger: KSPLogger) {
         }
     )
     headers.addAll(findStaticHeaders())
+
+    val headerMapParameterNames = allParameterAnnotations
+      .asSequence()
+      .filterIsInstance<HttpParameterAnnotation.HeaderMap>()
+      .mapNotNull { it.parameter.name?.asString() }
+      .toList()
 
     val bodyParameterName = bodyAnnotations.getOrNull(0)?.parameter?.name?.asString()
     val bodyContentType = bodyAnnotations.getOrNull(0)?.contentType
@@ -467,6 +483,7 @@ public class ServiceParser(private val logger: KSPLogger) {
       method = httpMethodAnnotation.method,
       url = url,
       headers = headers,
+      headerMapParameterNames = headerMapParameterNames,
       content = content(),
       returnType = returnTypeName
     )
@@ -578,6 +595,14 @@ public class ServiceParser(private val logger: KSPLogger) {
             annotationType = resolvedAnnotationType
           )
         }
+        "HeaderMap" -> {
+          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+          HttpParameterAnnotation.HeaderMap(
+            parameter = this,
+            annotation = annotation,
+            annotationType = resolvedAnnotationType
+          )
+        }
         "Path" -> {
           val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
           val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
@@ -593,6 +618,14 @@ public class ServiceParser(private val logger: KSPLogger) {
           val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
           HttpParameterAnnotation.Query(
             name = name,
+            parameter = this,
+            annotation = annotation,
+            annotationType = resolvedAnnotationType
+          )
+        }
+        "QueryMap" -> {
+          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+          HttpParameterAnnotation.QueryMap(
             parameter = this,
             annotation = annotation,
             annotationType = resolvedAnnotationType
@@ -844,6 +877,12 @@ private sealed class HttpParameterAnnotation {
     override val annotationType: KSType
   ) : HttpParameterAnnotation()
 
+  data class HeaderMap(
+    override val parameter: KSValueParameter,
+    override val annotation: KSAnnotation,
+    override val annotationType: KSType
+  ) : HttpParameterAnnotation()
+
   data class Path(
     val name: String,
     override val parameter: KSValueParameter,
@@ -853,6 +892,12 @@ private sealed class HttpParameterAnnotation {
 
   data class Query(
     val name: String,
+    override val parameter: KSValueParameter,
+    override val annotation: KSAnnotation,
+    override val annotationType: KSType
+  ) : HttpParameterAnnotation()
+
+  data class QueryMap(
     override val parameter: KSValueParameter,
     override val annotation: KSAnnotation,
     override val annotationType: KSType

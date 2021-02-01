@@ -2,12 +2,16 @@ package connector
 
 import connector.http.GET
 import connector.http.Header
+import connector.http.HeaderMap
 import connector.http.Headers
 import connector.util.assertHttpLogMatches
 import connector.util.runHttpTest
 import io.ktor.client.utils.buildHeaders
+import io.ktor.http.Parameters
 import io.ktor.http.Url
 import io.ktor.http.headersOf
+import io.ktor.http.parametersOf
+import io.ktor.util.StringValues
 import org.junit.Test
 
 private val BASE_URL = Url("https://headers/")
@@ -91,6 +95,26 @@ private val BASE_URL = Url("https://headers/")
 
   @GET("get")
   @Headers("header:static")
+  suspend fun stringMap(@HeaderMap map: Map<String, String>)
+
+  @GET("get")
+  @Headers("header:static")
+  suspend fun anyMap(@HeaderMap map: Map<String, Any>)
+
+  @GET("get")
+  @Headers("header:static")
+  suspend fun mapOfIterableString(@HeaderMap map: Map<String, Iterable<String>>)
+
+  @GET("get")
+  @Headers("header:static")
+  suspend fun mapOfIterableAny(@HeaderMap map: Map<String, Iterable<Any>>)
+
+  @GET("get")
+  @Headers("header:static")
+  suspend fun stringValues(@HeaderMap stringValues: StringValues)
+
+  @GET("get")
+  @Headers("header:static")
   suspend fun iterableNullableTypes(
     @Header("header") h1: Iterable<String>?,
     @Header("header") h2: Collection<Any>?,
@@ -98,6 +122,9 @@ private val BASE_URL = Url("https://headers/")
     @Header("header") h4: Set<Any?>,
     @Header("header") h5: List<String?>?,
     @Header("header") h6: Iterable<Any?>?,
+    @HeaderMap stringValues: StringValues?,
+    @HeaderMap map1: Map<String, List<String?>?>?,
+    @HeaderMap map2: Map<String, Collection<Any?>?>?
   )
 }
 
@@ -430,6 +457,9 @@ class HttpHeaders {
       listOf(null),
       setOf(null),
       null,
+      null,
+      null,
+      null,
       null
     )
     // [static, d1, d2, d3, d4, d5, d6]
@@ -439,7 +469,10 @@ class HttpHeaders {
       listOf("d1", "d2"),
       setOf(null, "d3"),
       listOf("d4", null, "d5"),
-      setOf(null, "d6", null)
+      setOf(null, "d6", null),
+      null,
+      null,
+      null
     )
 
     assertHttpLogMatches(
@@ -462,5 +495,257 @@ class HttpHeaders {
         )
       },
     )
+  }
+
+  @Test fun `@HeaderMap of Strings`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
+
+    service.stringMap(emptyMap())
+    service.stringMap(mapOf("header" to "1"))
+    service.stringMap(mapOf("header" to "1", "otherHeader" to "2"))
+
+    assertHttpLogMatches(
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static", "1"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static", "1"),
+            "otherHeader" to listOf("2"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      }
+    )
+  }
+
+  @Test fun `@HeaderMap of Any`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
+
+    service.anyMap(emptyMap())
+    service.anyMap(
+      mapOf(
+        "header" to object : Any() {
+          override fun toString(): String = "1"
+        }
+      )
+    )
+    service.anyMap(
+      mapOf(
+        "header" to object : Any() {
+          override fun toString(): String = "1"
+        },
+        "otherHeader" to object : Any() {
+          override fun toString(): String = "2"
+        }
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static", "1"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static", "1"),
+            "otherHeader" to listOf("2"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      }
+    )
+  }
+
+  @Test fun `@HeaderMap of String Iterable`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
+
+    service.mapOfIterableString(emptyMap())
+    service.mapOfIterableString(
+      mapOf(
+        "header" to listOf("1"),
+        "otherHeader" to listOf("2", "3")
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static", "1"),
+            "otherHeader" to listOf("2", "3"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      }
+    )
+  }
+
+  @Test fun `@HeaderMap of Any Iterable`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
+
+    service.mapOfIterableAny(emptyMap())
+    service.mapOfIterableAny(
+      mapOf(
+        "header" to listOf(
+          object : Any() {
+            override fun toString() = "1"
+          }
+        ),
+        "otherHeader" to listOf(
+          object : Any() {
+            override fun toString() = "2"
+          },
+          object : Any() {
+            override fun toString() = "3"
+          }
+        )
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static", "1"),
+            "otherHeader" to listOf("2", "3"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      }
+    )
+  }
+
+  @Test fun `StringValues @HeaderMap`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
+
+    service.stringValues(StringValues.Empty)
+    service.stringValues(Parameters.Empty)
+    service.stringValues(
+      parametersOf(
+        "header" to listOf("1"),
+        "otherHeader" to listOf("2", "3")
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static", "1"),
+            "otherHeader" to listOf("2", "3"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      }
+    )
+  }
+
+  @Test fun `@HeaderMap iterable values with null items`() = runHttpTest {
+    val service = HttpHeadersTestService(BASE_URL, httpClient)
+
+    service.iterableNullableTypes(
+      null,
+      null,
+      emptyList(),
+      emptySet(),
+      null,
+      null,
+      buildHeaders {
+        append("header", "a")
+        appendAll("header", listOf("b", "c"))
+      },
+      mapOf(
+        "header" to listOf(null, null),
+        "otherHeader" to listOf(null, "d")
+      ),
+      mapOf(
+        "header" to listOf(null, "e", null),
+        "otherHeader" to setOf("f", null)
+      )
+    )
+
+    assertHttpLogMatches {
+      hasRequestHeaders(
+        headersOf(
+          "header" to listOf("static", "a", "b", "c", "e"),
+          "otherHeader" to listOf("d", "f"),
+          "Accept-Charset" to listOf("UTF-8"),
+          "Accept" to listOf("*/*")
+        )
+      )
+    }
   }
 }

@@ -3,12 +3,17 @@ package connector
 import connector.http.GET
 import connector.http.Path
 import connector.http.Query
+import connector.http.QueryMap
 import connector.test.util.assertThrows
 import connector.util.assertHttpLogMatches
 import connector.util.runHttpTest
+import io.ktor.http.Parameters
+import io.ktor.http.ParametersBuilder
 import io.ktor.http.URLBuilder
 import io.ktor.http.URLProtocol
 import io.ktor.http.Url
+import io.ktor.http.parametersOf
+import io.ktor.util.StringValues
 import org.junit.Test
 
 private val BASE_URL = Url("https://urls/base/")
@@ -121,6 +126,9 @@ private val BASE_URL = Url("https://urls/base/")
     @Query("q") q4: Set<Any?>,
     @Query("q") q5: List<String?>?,
     @Query("q") q6: Iterable<Any?>?,
+    @QueryMap stringValues: StringValues?,
+    @QueryMap map1: Map<String, List<String?>?>?,
+    @QueryMap map2: Map<String, Collection<Any?>?>?
   )
 
   @GET("query/parameter/with/question/mark")
@@ -142,6 +150,21 @@ private val BASE_URL = Url("https://urls/base/")
     @URL url: Any,
     @Query("dynamic") dynamicQueryParam: Any
   )
+
+  @GET("get?q=static")
+  suspend fun queryParameterStringMap(@QueryMap map: Map<String, String>)
+
+  @GET("get?q=static")
+  suspend fun queryParameterAnyMap(@QueryMap map: Map<String, Any>)
+
+  @GET("get?q=static")
+  suspend fun queryParameterMapOfIterableString(@QueryMap map: Map<String, Iterable<String>>)
+
+  @GET("get?q=static")
+  suspend fun queryParameterMapOfIterableAny(@QueryMap map: Map<String, Iterable<Any>>)
+
+  @GET("get?q=static")
+  suspend fun queryParameterStringValues(@QueryMap stringValues: StringValues)
 }
 
 class HttpUrls {
@@ -649,6 +672,9 @@ class HttpUrls {
       listOf(null),
       setOf(null),
       null,
+      null,
+      null,
+      null,
       null
     )
     // [10, 20, 30, 40, 50, 60, 70]
@@ -658,12 +684,177 @@ class HttpUrls {
       listOf("20", "30"),
       setOf(null, "40"),
       listOf("50", null, "60"),
-      setOf(null, "70", null)
+      setOf(null, "70", null),
+      null,
+      null,
+      null
     )
 
     assertHttpLogMatches(
       { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10") },
       { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=20&q=30&q=40&q=50&q=60&q=70") },
     )
+  }
+
+  @Test fun `@QueryMap of Strings`() = runHttpTest {
+    val service = HttpUrlsTestService(BASE_URL, httpClient)
+
+    service.queryParameterStringMap(emptyMap())
+    service.queryParameterStringMap(mapOf("q" to "1"))
+    service.queryParameterStringMap(mapOf("q" to "1", "r" to "2"))
+
+    assertHttpLogMatches(
+      {
+        hasUrl("https://urls/base/get?q=static")
+      },
+      {
+        hasUrl("https://urls/base/get?q=static&q=1")
+      },
+      {
+        hasUrl("https://urls/base/get?q=static&q=1&r=2")
+      }
+    )
+  }
+
+  @Test fun `@QueryMap of Any`() = runHttpTest {
+    val service = HttpUrlsTestService(BASE_URL, httpClient)
+
+    service.queryParameterAnyMap(emptyMap())
+    service.queryParameterAnyMap(
+      mapOf(
+        "q" to object : Any() {
+          override fun toString(): String = "1"
+        }
+      )
+    )
+    service.queryParameterAnyMap(
+      mapOf(
+        "q" to object : Any() {
+          override fun toString(): String = "1"
+        },
+        "r" to object : Any() {
+          override fun toString(): String = "2"
+        }
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasUrl("https://urls/base/get?q=static")
+      },
+      {
+        hasUrl("https://urls/base/get?q=static&q=1")
+      },
+      {
+        hasUrl("https://urls/base/get?q=static&q=1&r=2")
+      }
+    )
+  }
+
+  @Test fun `@QueryMap of String Iterable`() = runHttpTest {
+    val service = HttpUrlsTestService(BASE_URL, httpClient)
+
+    service.queryParameterMapOfIterableString(emptyMap())
+    service.queryParameterMapOfIterableString(
+      mapOf(
+        "q" to listOf("1"),
+        "r" to listOf("2", "3")
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasUrl("https://urls/base/get?q=static")
+      },
+      {
+        hasUrl("https://urls/base/get?q=static&q=1&r=2&r=3")
+      }
+    )
+  }
+
+  @Test fun `@QueryMap of Any Iterable`() = runHttpTest {
+    val service = HttpUrlsTestService(BASE_URL, httpClient)
+
+    service.queryParameterMapOfIterableAny(emptyMap())
+    service.queryParameterMapOfIterableAny(
+      mapOf(
+        "q" to listOf(
+          object : Any() {
+            override fun toString() = "1"
+          }
+        ),
+        "r" to listOf(
+          object : Any() {
+            override fun toString() = "2"
+          },
+          object : Any() {
+            override fun toString() = "3"
+          }
+        )
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasUrl("https://urls/base/get?q=static")
+      },
+      {
+        hasUrl("https://urls/base/get?q=static&q=1&r=2&r=3")
+      }
+    )
+  }
+
+  @Test fun `StringValues @QueryMap`() = runHttpTest {
+    val service = HttpUrlsTestService(BASE_URL, httpClient)
+
+    service.queryParameterStringValues(StringValues.Empty)
+    service.queryParameterStringValues(Parameters.Empty)
+    service.queryParameterStringValues(
+      parametersOf(
+        "q" to listOf("1"),
+        "r" to listOf("2", "3")
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasUrl("https://urls/base/get?q=static")
+      },
+      {
+        hasUrl("https://urls/base/get?q=static")
+      },
+      {
+        hasUrl("https://urls/base/get?q=static&q=1&r=2&r=3")
+      }
+    )
+  }
+
+  @Test fun `@QueryMap iterable values with null items`() = runHttpTest {
+    val service = HttpUrlsTestService(BASE_URL, httpClient)
+
+    service.queryParameterIterableNullableTypes(
+      null,
+      null,
+      emptyList(),
+      emptySet(),
+      null,
+      null,
+      ParametersBuilder().apply {
+        append("q", "a")
+        appendAll("q", listOf("b", "c"))
+      }.build(),
+      mapOf(
+        "q" to listOf(null, null),
+        "r" to listOf(null, "d")
+      ),
+      mapOf(
+        "q" to listOf(null, "e", null),
+        "r" to setOf("f", null)
+      )
+    )
+
+    assertHttpLogMatches {
+      hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=a&q=b&q=c&q=e&r=d&r=f")
+    }
   }
 }

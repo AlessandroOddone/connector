@@ -20,6 +20,7 @@ public data class ServiceDescription(
       public val method: String,
       public val url: Url,
       public val headers: List<StringValue>,
+      public val headerMapParameterNames: List<String>,
       public val content: HttpContent?,
       public val returnType: TypeName
     ) : Function() {
@@ -48,17 +49,20 @@ public data class ServiceDescription(
 
   public sealed class Url {
     public abstract val dynamicQueryParameters: List<StringValue.Dynamic>
+    public abstract val queryMapParameterNames: List<String>
 
     public data class Template(
       public val value: String,
       public val type: UrlType,
       public val replaceBlockToParameterMap: Map<String, String>,
-      override val dynamicQueryParameters: List<StringValue.Dynamic>
+      override val dynamicQueryParameters: List<StringValue.Dynamic>,
+      override val queryMapParameterNames: List<String>
     ) : Url()
 
     public data class Dynamic(
       val parameterName: String,
-      override val dynamicQueryParameters: List<StringValue.Dynamic>
+      override val dynamicQueryParameters: List<StringValue.Dynamic>,
+      override val queryMapParameterNames: List<String>
     ) : Url()
   }
 

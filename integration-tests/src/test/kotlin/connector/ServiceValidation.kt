@@ -716,7 +716,7 @@ class ServiceValidation {
     )
 
     sourceFile.runTestCompilation {
-      assertKspErrors("Content-Type header cannot be defined via @Header, but only via @Body." atLine 7)
+      assertKspErrors("Content-Type header cannot be defined via @Header." atLine 7)
     }
   }
 
@@ -1900,6 +1900,126 @@ class ServiceValidation {
       assertKspErrors(
         "@PartMap keys must be of type 'kotlin.String'." atLine 14,
         "@PartMap keys must be of type 'kotlin.String'." atLine 15,
+      )
+    }
+  }
+
+  @Test fun `@QueryMap type must be either Map or StringValues`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+      import kotlin.collections.*
+      import io.ktor.util.StringValues
+
+      @Service interface TestApi {
+        @GET("get") 
+        suspend fun post(
+          @QueryMap("q") valid1: Map<String, String>,
+          @QueryMap("q") valid2: StringValues,
+          @QueryMap("q") notValid: Pair<String, String>
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@QueryMap parameter type must be either 'kotlin.collections.Map' or 'io.ktor.util.StringValues'." atLine 13
+      )
+    }
+  }
+
+  @Test fun `@QueryMap keys must be strings`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+      import kotlin.collections.*
+
+      data class StringWrapper(val value: String)
+
+      @Service interface TestApi {
+        @GET("get") 
+        suspend fun post(
+          @QueryMap("q") valid: Map<String, String>,
+          @QueryMap("q") notValid1: Map<Int, String>,
+          @QueryMap("q") notValid2: Map<StringWrapper, String>
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@QueryMap keys must be of type 'kotlin.String'." atLine 13,
+        "@QueryMap keys must be of type 'kotlin.String'." atLine 14,
+      )
+    }
+  }
+
+  @Test fun `@HeaderMap type must be either Map or StringValues`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+      import kotlin.collections.*
+      import io.ktor.util.StringValues
+
+      @Service interface TestApi {
+        @GET("get") 
+        suspend fun post(
+          @HeaderMap("h") valid1: Map<String, String>,
+          @HeaderMap("h") valid2: StringValues,
+          @HeaderMap("h") notValid: Pair<String, String>
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@HeaderMap parameter type must be either 'kotlin.collections.Map' or 'io.ktor.util.StringValues'." atLine 13
+      )
+    }
+  }
+
+  @Test fun `@HeaderMap keys must be strings`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+      import kotlin.collections.*
+
+      data class StringWrapper(val value: String)
+
+      @Service interface TestApi {
+        @GET("get") 
+        suspend fun post(
+          @HeaderMap("h") valid: Map<String, String>,
+          @HeaderMap("h") notValid1: Map<Int, String>,
+          @HeaderMap("h") notValid2: Map<StringWrapper, String>
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@HeaderMap keys must be of type 'kotlin.String'." atLine 13,
+        "@HeaderMap keys must be of type 'kotlin.String'." atLine 14,
       )
     }
   }

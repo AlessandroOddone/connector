@@ -38,6 +38,9 @@ public annotation class Path(val name: String)
 @Target(AnnotationTarget.VALUE_PARAMETER)
 public annotation class Query(val name: String)
 
+@Target(AnnotationTarget.VALUE_PARAMETER)
+public annotation class QueryMap
+
 /**
  * Headers
  */
@@ -47,6 +50,9 @@ public annotation class Headers(vararg val values: String)
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
 public annotation class Header(val name: String)
+
+@Target(AnnotationTarget.VALUE_PARAMETER)
+public annotation class HeaderMap
 
 /**
  * Body

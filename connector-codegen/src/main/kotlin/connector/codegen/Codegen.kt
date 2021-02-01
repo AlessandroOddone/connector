@@ -432,7 +432,15 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           endControlFlow()
         }
       }
-
+      url.queryMapParameterNames.forEach { parameterName ->
+        add(
+          addMapToParameterBuilderCodeBlock(
+            mapParameterName = parameterName,
+            mapTypeName = parameters.getValue(parameterName),
+            parametersBuilderNameReference = "parameters"
+          )
+        )
+      }
       endControlFlow()
     }
 
@@ -502,6 +510,14 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           endControlFlow()
         }
       }
+      headerMapParameterNames.forEach { parameterName ->
+        add(
+          addMapToParameterBuilderCodeBlock(
+            mapParameterName = parameterName,
+            mapTypeName = parameters.getValue(parameterName)
+          )
+        )
+      }
       endControlFlow()
     }
 
@@ -567,7 +583,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       )
       indent()
       add(
-        obtainSerializerFor(
+        obtainSerializerCodeBlock(
           if (isHttpBodyClass) {
             (typeName as ParameterizedTypeName).typeArguments.first()
           } else {
@@ -659,81 +675,12 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       }
 
       content.fieldMapParameterNames.forEach { parameterName ->
-        val fieldMapTypeName = parameters.getValue(parameterName)
-
-        when (fieldMapTypeName.classNameOrNull()?.canonicalName) {
-          StringValues::class.qualifiedName -> {
-            if (fieldMapTypeName.isNullable) {
-              beginControlFlow("if ($parameterName·!= null)")
-            }
-            addStatement("appendAll($parameterName)")
-            if (fieldMapTypeName.isNullable) {
-              endControlFlow()
-            }
-          }
-
-          "kotlin.collections.Map" -> {
-            val valueTypeName = (fieldMapTypeName as ParameterizedTypeName).typeArguments[1]
-            val valueTypeQualifiedName = valueTypeName.classNameOrNull()?.canonicalName
-
-            beginControlFlow(
-              "$parameterName%L.%M { (key, value) ->",
-              if (fieldMapTypeName.isNullable) "?" else "",
-              MemberName("kotlin.collections", "forEach")
-            )
-
-            if (valueTypeName.isNullable) {
-              beginControlFlow("if (value != null)")
-            }
-
-            when {
-              valueTypeQualifiedName == "kotlin.String" -> {
-                addStatement("append(key, value)")
-              }
-
-              ITERABLE_TYPE_QUALIFIED_NAMES.contains(valueTypeQualifiedName) -> {
-                val iterableTypeArgumentName = (valueTypeName as ParameterizedTypeName).typeArguments[0]
-                when {
-                  iterableTypeArgumentName.classNameOrNull()?.canonicalName != "kotlin.String" -> {
-                    addStatement(
-                      "appendAll(key, value.%M { it%L.toString() })",
-                      MemberName(
-                        "kotlin.collections",
-                        if (iterableTypeArgumentName.isNullable) "mapNotNull" else "map"
-                      ),
-                      if (iterableTypeArgumentName.isNullable) "?" else ""
-                    )
-                  }
-
-                  // Iterable<String?>
-                  iterableTypeArgumentName.isNullable -> {
-                    addStatement(
-                      "appendAll(key, value.%M())",
-                      MemberName("kotlin.collections", "filterNotNull")
-                    )
-                  }
-
-                  // Iterable<String>
-                  else -> {
-                    addStatement("appendAll(key, value)")
-                  }
-                }
-              }
-
-              else -> {
-                addStatement("append(key, value.toString())")
-              }
-            }
-
-            if (valueTypeName.isNullable) {
-              endControlFlow()
-            }
-
-            endControlFlow()
-          }
-
-          else -> error("Unexpected parameter type: $fieldMapTypeName")
-        }
+        add(
+          addMapToParameterBuilderCodeBlock(
+            mapParameterName = parameterName,
+            mapTypeName = parameters.getValue(parameterName)
+          )
+        )
       }
 
       endControlFlow()
@@ -874,7 +821,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           contentTypeVariableName
         )
         indent()
-        add(obtainSerializerFor(deserializedResponseBodyTypeName))
+        add(obtainSerializerCodeBlock(deserializedResponseBodyTypeName))
         add(",\n$successVariableName.body,\n$contentTypeVariableName\n")
         unindent()
         add(")\n")
@@ -1481,16 +1428,16 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
     .build()
 }
 
-private fun obtainSerializerFor(typeName: TypeName): CodeBlock = buildCodeBlock {
-  when (typeName) {
+private fun obtainSerializerCodeBlock(typeToSerializeName: TypeName): CodeBlock = buildCodeBlock {
+  when (typeToSerializeName) {
     is ClassName -> {
-      when (typeName.canonicalName) {
+      when (typeToSerializeName.canonicalName) {
         "kotlin.Boolean", "kotlin.Byte", "kotlin.Char",
         "kotlin.Double", "kotlin.Float", "kotlin.Int",
         "kotlin.Long", "kotlin.Short", "kotlin.String" -> {
           add(
             "%T.%M()",
-            typeName.nonNull(),
+            typeToSerializeName.nonNull(),
             MemberName("kotlinx.serialization.builtins", "serializer")
           )
         }
@@ -1498,24 +1445,24 @@ private fun obtainSerializerFor(typeName: TypeName): CodeBlock = buildCodeBlock 
         "kotlin.BooleanArray", "kotlin.ByteArray", "kotlin.CharArray",
         "kotlin.DoubleArray", "kotlin.FloatArray", "kotlin.IntArray",
         "kotlin.LongArray", "kotlin.ShortArray" -> {
-          val serializerName = "${typeName.simpleName}Serializer"
+          val serializerName = "${typeToSerializeName.simpleName}Serializer"
           add("%M()", MemberName("kotlinx.serialization.builtins", serializerName))
         }
 
         else -> {
-          add("%T.serializer()", typeName.nonNull())
+          add("%T.serializer()", typeToSerializeName.nonNull())
         }
       }
     }
 
     is ParameterizedTypeName -> {
-      val literalPlaceholders = typeName.typeArguments.joinToString { "%L" }
-      val literalArgs = typeName.typeArguments.map { obtainSerializerFor(it) }.toTypedArray()
+      val literalPlaceholders = typeToSerializeName.typeArguments.joinToString { "%L" }
+      val literalArgs = typeToSerializeName.typeArguments.map { obtainSerializerCodeBlock(it) }.toTypedArray()
 
-      when (typeName.rawType.canonicalName) {
+      when (typeToSerializeName.rawType.canonicalName) {
         "kotlin.Array", "kotlin.collections.List", "kotlin.collections.Set", "kotlin.collections.Map",
         "kotlin.collections.Map.Entry", "kotlin.Pair", "kotlin.Triple" -> {
-          val serializerName = "${typeName.rawType.simpleNames.joinToString("")}Serializer"
+          val serializerName = "${typeToSerializeName.rawType.simpleNames.joinToString("")}Serializer"
           add(
             "%M($literalPlaceholders)",
             MemberName("kotlinx.serialization.builtins", serializerName),
@@ -1526,7 +1473,7 @@ private fun obtainSerializerFor(typeName: TypeName): CodeBlock = buildCodeBlock 
         else -> {
           add(
             "%T.serializer($literalPlaceholders)",
-            typeName.rawType.nonNull(),
+            typeToSerializeName.rawType.nonNull(),
             *literalArgs
           )
         }
@@ -1536,8 +1483,103 @@ private fun obtainSerializerFor(typeName: TypeName): CodeBlock = buildCodeBlock 
     else -> error("Expected 'typeName' to be either a ClassName or a ParameterizedTypeName")
   }
 
-  if (typeName.isNullable) {
+  if (typeToSerializeName.isNullable) {
     add(".%M", MemberName("kotlinx.serialization.builtins", "nullable"))
+  }
+}
+
+// 'parametersBuilderNameReference' should be null if the target builder is a receiver type in the current scope.
+private fun addMapToParameterBuilderCodeBlock(
+  mapParameterName: String,
+  mapTypeName: TypeName,
+  parametersBuilderNameReference: String? = null
+): CodeBlock = buildCodeBlock {
+  when (mapTypeName.classNameOrNull()?.canonicalName) {
+    StringValues::class.qualifiedName -> {
+      if (mapTypeName.isNullable) {
+        beginControlFlow("if ($mapParameterName·!= null)")
+      }
+      addStatement(
+        "%LappendAll($mapParameterName)",
+        parametersBuilderNameReference?.let { "$it." }.orEmpty()
+      )
+      if (mapTypeName.isNullable) {
+        endControlFlow()
+      }
+    }
+
+    "kotlin.collections.Map" -> {
+      val valueTypeName = (mapTypeName as ParameterizedTypeName).typeArguments[1]
+      val valueTypeQualifiedName = valueTypeName.classNameOrNull()?.canonicalName
+
+      beginControlFlow(
+        "$mapParameterName%L.%M { (key, value) ->",
+        if (mapTypeName.isNullable) "?" else "",
+        MemberName("kotlin.collections", "forEach")
+      )
+
+      if (valueTypeName.isNullable) {
+        beginControlFlow("if (value != null)")
+      }
+
+      when {
+        valueTypeQualifiedName == "kotlin.String" -> {
+          addStatement(
+            "%Lappend(key, value)",
+            parametersBuilderNameReference?.let { "$it." }.orEmpty()
+          )
+        }
+
+        ITERABLE_TYPE_QUALIFIED_NAMES.contains(valueTypeQualifiedName) -> {
+          val iterableTypeArgumentName = (valueTypeName as ParameterizedTypeName).typeArguments[0]
+          when {
+            iterableTypeArgumentName.classNameOrNull()?.canonicalName != "kotlin.String" -> {
+              addStatement(
+                "%LappendAll(key, value.%M { it%L.toString() })",
+                parametersBuilderNameReference?.let { "$it." }.orEmpty(),
+                MemberName(
+                  "kotlin.collections",
+                  if (iterableTypeArgumentName.isNullable) "mapNotNull" else "map"
+                ),
+                if (iterableTypeArgumentName.isNullable) "?" else ""
+              )
+            }
+
+            // Iterable<String?>
+            iterableTypeArgumentName.isNullable -> {
+              addStatement(
+                "%LappendAll(key, value.%M())",
+                parametersBuilderNameReference?.let { "$it." }.orEmpty(),
+                MemberName("kotlin.collections", "filterNotNull")
+              )
+            }
+
+            // Iterable<String>
+            else -> {
+              addStatement(
+                "%LappendAll(key, value)",
+                parametersBuilderNameReference?.let { "$it." }.orEmpty()
+              )
+            }
+          }
+        }
+
+        else -> {
+          addStatement(
+            "%Lappend(key, value.toString())",
+            parametersBuilderNameReference?.let { "$it." }.orEmpty()
+          )
+        }
+      }
+
+      if (valueTypeName.isNullable) {
+        endControlFlow()
+      }
+
+      endControlFlow()
+    }
+
+    else -> error("Unexpected parameter type: $mapTypeName")
   }
 }
 
