@@ -7,7 +7,7 @@ object Versions {
   const val KOTLIN_POET = "1.7.2"
   const val KOTLIN_COMPILE_TESTING = "1.3.4"
   const val KOTLINX_SERIALIZATION = "1.0.1"
-  const val KSP = "1.4.20-dev-experimental-20210120"
+  const val KSP = "1.4.20-dev-experimental-20210203"
   const val KTLINT_GRADLE_PLUGIN = "9.4.1"
   const val KTOR = "1.4.1"
 }

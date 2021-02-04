@@ -4,7 +4,7 @@ plugins {
 }
 
 dependencies {
-  ksp(project(":connector-processor"))
+  kspTest(project(":connector-processor"))
   testImplementation(project(":connector-processor"))
   testImplementation(project(":connector-runtime-http"))
   testImplementation(project(":test-util"))
