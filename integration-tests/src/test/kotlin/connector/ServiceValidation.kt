@@ -404,7 +404,7 @@ class ServiceValidation {
       import connector.http.*
 
       @Service interface TestApi {
-        @HEAD("head") suspend fun head(@Body("*/*") body: String): String
+        @HEAD("head") suspend fun head(@Body("*/*") body: String)
       }
       """
     )
@@ -431,6 +431,35 @@ class ServiceValidation {
 
     sourceFile.runTestCompilation {
       assertKspErrors("@Body is not allowed in OPTIONS requests." atLine 7)
+    }
+  }
+
+  @Test fun `@HEAD invalid success body types`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+      import kotlin.collections.*
+
+      @Service interface TestApi {
+        @HEAD("head") suspend fun head1(): String
+        @HEAD("head") suspend fun head2(): HttpResult<String>
+        @HEAD("head") suspend fun head3(): HttpResponse<String>
+        @HEAD("head") suspend fun head4(): HttpResponse.Success<String>
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "@HEAD can only be used with 'kotlin.Unit' or '*' as the success body type." atLine 8,
+        "@HEAD can only be used with 'kotlin.Unit' or '*' as the success body type." atLine 9,
+        "@HEAD can only be used with 'kotlin.Unit' or '*' as the success body type." atLine 10,
+        "@HEAD can only be used with 'kotlin.Unit' or '*' as the success body type." atLine 11,
+      )
     }
   }
 

@@ -12,6 +12,7 @@ import com.google.devtools.ksp.symbol.KSTypeArgument
 import com.google.devtools.ksp.symbol.KSValueParameter
 import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.symbol.Nullability
+import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.ParameterizedTypeName
 import com.squareup.kotlinpoet.STAR
 import com.squareup.kotlinpoet.STRING
@@ -468,6 +469,14 @@ public class ServiceParser(private val logger: KSPLogger) {
     val returnType = returnType?.resolve()
     val returnTypeName = returnType?.typeNameWithValidation(this, SerializableTypeValidation.HTTP_FUNCTION_RETURN)
 
+    // Validate return type for @HEAD
+    if (
+      httpMethodAnnotations.any { it.name == "HEAD" } &&
+      returnTypeName?.isValidReturnTypeForHttpHead() != true
+    ) {
+      logger.error("@HEAD can only be used with 'kotlin.Unit' or '*' as the success body type.", this)
+    }
+
     if (
       httpMethodAnnotation == null ||
       url == null ||
@@ -831,6 +840,24 @@ public class ServiceParser(private val logger: KSPLogger) {
       }
     }
     return false
+  }
+
+  private fun TypeName.isValidReturnTypeForHttpHead(): Boolean {
+    if (this is ClassName) {
+      return canonicalName == "kotlin.Unit"
+    }
+    if (this is ParameterizedTypeName) {
+      return when (rawType.canonicalName) {
+        "connector.http.HttpResult", "connector.http.HttpResponse", "connector.http.HttpResponse.Success" -> {
+          val successBodyType = typeArguments.first()
+          return successBodyType == STAR || successBodyType.classNameOrNull()?.canonicalName == "kotlin.Unit"
+        }
+
+        else -> false
+      }
+    }
+    // Avoid a potentially confusing error message if the return type is '*' (which is already a compilation error).
+    return this != STAR
   }
 }
 

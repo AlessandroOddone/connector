@@ -4,6 +4,8 @@ import connector.http.DELETE
 import connector.http.GET
 import connector.http.HEAD
 import connector.http.HTTP
+import connector.http.HttpResponse
+import connector.http.HttpResult
 import connector.http.OPTIONS
 import connector.http.PATCH
 import connector.http.POST
@@ -25,6 +27,14 @@ private val BASE_URL = Url("https://methods/")
   @POST("post") suspend fun post()
   @PUT("put") suspend fun put()
   @HTTP(method = "CUSTOM", url = "customMethod") suspend fun customMethod()
+
+  // Valid return types for @HEAD
+  @HEAD("head") suspend fun headResult(): HttpResult<Unit>
+  @HEAD("head") suspend fun headResponse(): HttpResponse<Unit>
+  @HEAD("head") suspend fun headResponseSuccess(): HttpResponse.Success<Unit>
+  @HEAD("head") suspend fun headResultStar(): HttpResult<*>
+  @HEAD("head") suspend fun headResponseStar(): HttpResponse<*>
+  @HEAD("head") suspend fun headResponseSuccessStar(): HttpResponse.Success<*>
 }
 
 class HttpMethods {
@@ -48,11 +58,45 @@ class HttpMethods {
 
   @Test fun `@HEAD`() = runHttpTest {
     val service = HttpMethodsTestService(BASE_URL, httpClient)
+
     service.head()
-    assertHttpLogMatches {
-      hasMethod(HttpMethod.Head)
-      hasUrl("${BASE_URL}head")
-    }
+    service.headResult()
+    service.headResponse()
+    service.headResponseSuccess()
+    service.headResultStar()
+    service.headResponseStar()
+    service.headResponseSuccessStar()
+
+    assertHttpLogMatches(
+      {
+        hasMethod(HttpMethod.Head)
+        hasUrl("${BASE_URL}head")
+      },
+      {
+        hasMethod(HttpMethod.Head)
+        hasUrl("${BASE_URL}head")
+      },
+      {
+        hasMethod(HttpMethod.Head)
+        hasUrl("${BASE_URL}head")
+      },
+      {
+        hasMethod(HttpMethod.Head)
+        hasUrl("${BASE_URL}head")
+      },
+      {
+        hasMethod(HttpMethod.Head)
+        hasUrl("${BASE_URL}head")
+      },
+      {
+        hasMethod(HttpMethod.Head)
+        hasUrl("${BASE_URL}head")
+      },
+      {
+        hasMethod(HttpMethod.Head)
+        hasUrl("${BASE_URL}head")
+      }
+    )
   }
 
   @Test fun `@OPTIONS`() = runHttpTest {
