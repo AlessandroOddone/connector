@@ -30,6 +30,8 @@ import connector.processor.util.typeName
 import io.ktor.http.BadContentTypeFormatException
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.IllegalHeaderNameException
+import io.ktor.http.IllegalHeaderValueException
 import java.lang.StringBuilder
 
 public class ServiceParser(private val logger: KSPLogger) {
@@ -542,6 +544,32 @@ public class ServiceParser(private val logger: KSPLogger) {
     }
   }
 
+  // Logs an error at 'node' if 'name' is NOT a valid header name.
+  private fun validateHeaderName(name: String, node: KSNode) {
+    try {
+      HttpHeaders.checkHeaderName(name)
+    } catch (e: IllegalHeaderNameException) {
+      logger.error(
+        "Header name contains the illegal character '${name[e.position].toString().escape()}' " +
+          "(code ${(name[e.position].toInt() and 0xff)})",
+        node
+      )
+    }
+  }
+
+  // Logs an error at 'node' if 'value' is NOT a valid header value.
+  private fun validateHeaderValue(value: String, node: KSNode) {
+    try {
+      HttpHeaders.checkHeaderValue(value)
+    } catch (e: IllegalHeaderValueException) {
+      logger.error(
+        "Header value contains the illegal character '${value[e.position].toString().escape()}' " +
+          "(code ${(value[e.position].toInt() and 0xff)})",
+        node
+      )
+    }
+  }
+
   private fun KSFunctionDeclaration.findStaticHeaders(): List<StringValue.Static> {
     return annotations
       .asSequence()
@@ -560,6 +588,7 @@ public class ServiceParser(private val logger: KSPLogger) {
             return@mapNotNull null
           }
           val name = colonSplits[0].trimEnd()
+          validateHeaderName(name, annotation)
           if (name == HttpHeaders.ContentType) {
             logger.error(
               "${HttpHeaders.ContentType} header cannot be defined via @Headers, but only via @Body.",
@@ -575,6 +604,7 @@ public class ServiceParser(private val logger: KSPLogger) {
             return@mapNotNull null
           }
           val value = colonSplits[1].trimStart()
+          validateHeaderValue(value, annotation)
           StringValue.Static(name = name, value = value)
         }
       }
@@ -596,9 +626,10 @@ public class ServiceParser(private val logger: KSPLogger) {
         }
         "Header" -> {
           val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-          val name = annotation.arguments.getOrNull(0)?.value ?: return@mapNotNull null
+          val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
+          validateHeaderName(name, annotation)
           HttpParameterAnnotation.Header(
-            name = name as String,
+            name = name,
             parameter = this,
             annotation = annotation,
             annotationType = resolvedAnnotationType
@@ -1019,3 +1050,23 @@ private val NON_ERROR_HTTP_RESULT_TYPES_QUALIFIED_NAMES = listOf(
   "connector.http.HttpResponse",
   "connector.http.HttpResponse.Success",
 )
+
+private fun String.escape(): String {
+  val stringBuilder = StringBuilder()
+  forEach { char ->
+    stringBuilder.append(
+      when (char) {
+        '\t' -> "\\t"
+        '\b' -> "\\b"
+        '\n' -> "\\n"
+        '\r' -> "\\r"
+        '\'' -> "\\\'"
+        '\"' -> "\\\""
+        '\\' -> "\\\\"
+        '$' -> "\\$"
+        else -> char
+      }
+    )
+  }
+  return stringBuilder.toString()
+}

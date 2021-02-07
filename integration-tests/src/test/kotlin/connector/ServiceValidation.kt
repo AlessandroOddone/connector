@@ -2052,6 +2052,42 @@ class ServiceValidation {
       )
     }
   }
+
+  @Test fun `HTTP headers validation errors`() {
+    val sourceFile = kotlin(
+      "Test.kt",
+      """
+      package test
+
+      import connector.*
+      import connector.http.*
+      import kotlin.collections.*
+
+      @Service interface TestApi {
+        @GET("get") 
+        @Headers("has space:value")
+        @Headers(
+          "has,delimiter:value",
+          "name:inv\nalid"
+        )
+        suspend fun post(
+          @Header("a\tb") h1: String,
+          @Header("has;delimiter") h2: String,
+        )
+      }
+      """
+    )
+
+    sourceFile.runTestCompilation {
+      assertKspErrors(
+        "Header name contains the illegal character ' ' (code 32)" atLine 9,
+        "Header name contains the illegal character ',' (code 44)" atLine 10,
+        "Header value contains the illegal character '\\n' (code 10)" atLine 10,
+        "Header name contains the illegal character '\\t' (code 9)" atLine 15,
+        "Header name contains the illegal character ';' (code 59)" atLine 16
+      )
+    }
+  }
 }
 
 private const val EXPECTED_BODY_TYPES_MESSAGE_PART =

@@ -49,6 +49,7 @@ private class TestCompilationContextImpl(
     val kspErrors = compilationResult.messages
       .lineSequence()
       .mapNotNull { KspError.parse(it) }
+      .sortedBy { it.line }
       .toList()
 
     val kspErrorLogsFormatted by lazy {
