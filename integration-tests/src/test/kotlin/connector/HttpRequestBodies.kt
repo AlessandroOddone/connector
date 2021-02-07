@@ -2,7 +2,10 @@ package connector
 
 import connector.http.Body
 import connector.http.HttpBody
+import connector.http.HttpContentSerializer
+import connector.http.HttpResult
 import connector.http.POST
+import connector.test.util.assertIs
 import connector.test.util.assertThrows
 import connector.util.HttpLogEntry
 import connector.util.JsonContentSerializer
@@ -10,12 +13,18 @@ import connector.util.assertHttpLogMatches
 import connector.util.runHttpTest
 import io.ktor.http.ContentType
 import io.ktor.http.Url
+import io.ktor.http.content.OutgoingContent
+import io.ktor.utils.io.ByteReadChannel
+import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import org.junit.Test
+import kotlin.test.assertEquals
 
 private val BASE_URL = Url("https://requestBodies/")
 private const val JSON = "application/json"
@@ -30,6 +39,7 @@ private const val JSON = "application/json"
   @POST("postLong") suspend fun postLong(@Body(JSON) body: Long)
   @POST("postShort") suspend fun postShort(@Body(JSON) body: Short)
   @POST("postString") suspend fun postString(@Body(JSON) body: String)
+  @POST("postString") suspend fun postStringResult(@Body(JSON) body: String): HttpResult<*>
 
   @POST("postBooleanArray") suspend fun postBooleanArray(@Body(JSON) body: BooleanArray)
   @POST("postByteArray") suspend fun postByteArray(@Body(JSON) body: ByteArray)
@@ -464,6 +474,33 @@ class HttpRequestBodies {
     ) {
       service.postGif("gif")
     }
+  }
+
+  @Test fun `@Body serialization error`() = runHttpTest {
+    val throwingSerializer = object : HttpContentSerializer {
+      override fun canWrite(contentType: ContentType) = true
+      override fun canRead(contentType: ContentType?) = true
+
+      override fun <T> write(
+        serializationStrategy: SerializationStrategy<T>,
+        content: T,
+        contentType: ContentType
+      ): OutgoingContent = throw SerializationException("oops")
+
+      override suspend fun <T> read(
+        deserializationStrategy: DeserializationStrategy<T>,
+        content: ByteReadChannel,
+        contentType: ContentType?
+      ): T = throw SerializationException("oops")
+    }
+    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(throwingSerializer))
+
+    assertThrows<SerializationException>(message = "oops") { service.postString("s") }
+
+    val result = service.postStringResult("s")
+    assertIs<HttpResult.Failure>(result)
+    assertIs<SerializationException>(result.exception)
+    assertEquals("oops", result.exception.message)
   }
 }
 

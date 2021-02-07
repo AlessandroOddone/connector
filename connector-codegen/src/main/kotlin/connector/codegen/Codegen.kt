@@ -807,6 +807,10 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           MemberName("io.ktor.http", "contentType")
         )
 
+        if (returnTypeClassName == ClassNames.HTTP_RESULT) {
+          beginControlFlow("try")
+        }
+
         val deserializedBodyVariableName = variableName("deserializedResponseBody")
         add(
           "%L%L.%M(%L).read(\n",
@@ -850,6 +854,16 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           }
           else -> {
           } // do nothing: we've already got the deserialized body
+        }
+
+        if (returnTypeClassName == ClassNames.HTTP_RESULT) {
+          nextControlFlow("catch (throwable: %T)", ClassNames.THROWABLE)
+          addStatement(
+            "%L$resultVariableName.%M(throwable)",
+            if (isReturnNeeded) "return·" else "",
+            MemberName("connector.http", "toFailure")
+          )
+          endControlFlow()
         }
 
         if (isNestedHttpBodyNullable) {

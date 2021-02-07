@@ -2,6 +2,7 @@ package connector
 
 import connector.http.GET
 import connector.http.HttpBody
+import connector.http.HttpContentSerializer
 import connector.http.HttpResponse
 import connector.http.HttpResponseException
 import connector.http.HttpResult
@@ -20,7 +21,11 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpProtocolVersion
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
+import io.ktor.http.content.OutgoingContent
 import io.ktor.utils.io.ByteReadChannel
+import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
@@ -895,27 +900,76 @@ class HttpResponseBodies {
   @Test fun `No serializer for response Content-Type error`() = runHttpTest {
     val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
 
-    // missing Content-Type response header
+    // Missing Content-Type response header
+
+    httpRequestHandler { respond("true", headers = Headers.Empty) }
+
     assertThrows<IllegalStateException>(
       message = "No suitable HttpContentSerializer found for reading Content-Type: 'null'"
     ) {
-      httpRequestHandler { respond("true", headers = Headers.Empty) }
       service.getString()
     }
 
-    // unhandled Content-Type response header
+    service.getStringHttpResult().let { result ->
+      assertIs<HttpResult.Failure>(result)
+      assertIs<IllegalStateException>(result.exception)
+      assertEquals(
+        "No suitable HttpContentSerializer found for reading Content-Type: 'null'",
+        result.exception.message
+      )
+    }
+
+    // Unhandled Content-Type response header
+
+    httpRequestHandler {
+      respond(
+        "true",
+        headers = buildHeaders {
+          append(HttpHeaders.ContentType, "image/gif")
+        }
+      )
+    }
+
     assertThrows<IllegalStateException>(
       message = "No suitable HttpContentSerializer found for reading Content-Type: 'image/gif'"
     ) {
-      httpRequestHandler {
-        respond(
-          "true",
-          headers = buildHeaders {
-            append(HttpHeaders.ContentType, "image/gif")
-          }
-        )
-      }
       service.getString()
     }
+
+    service.getStringHttpResult().let { result ->
+      assertIs<HttpResult.Failure>(result)
+      assertIs<IllegalStateException>(result.exception)
+      assertEquals(
+        "No suitable HttpContentSerializer found for reading Content-Type: 'image/gif'",
+        result.exception.message
+      )
+    }
+  }
+
+  @Test fun `Response body serialization error`() = runHttpTest {
+    val throwingSerializer = object : HttpContentSerializer {
+      override fun canWrite(contentType: ContentType) = true
+      override fun canRead(contentType: ContentType?) = true
+
+      override fun <T> write(
+        serializationStrategy: SerializationStrategy<T>,
+        content: T,
+        contentType: ContentType
+      ): OutgoingContent = throw SerializationException("oops")
+
+      override suspend fun <T> read(
+        deserializationStrategy: DeserializationStrategy<T>,
+        content: ByteReadChannel,
+        contentType: ContentType?
+      ): T = throw SerializationException("oops")
+    }
+    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(throwingSerializer))
+
+    assertThrows<SerializationException>(message = "oops") { service.getString() }
+
+    val result = service.getStringHttpResult()
+    assertIs<HttpResult.Failure>(result)
+    assertIs<SerializationException>(result.exception)
+    assertEquals("oops", result.exception.message)
   }
 }
