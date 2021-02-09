@@ -38,7 +38,7 @@ fun runHttpTest(block: suspend HttpTestContext.() -> Unit) = runTest {
         }
         install(Logging) {
           logger = Logger.SIMPLE
-          level = LogLevel.ALL
+          level = LogLevel.HEADERS
         }
       }
 

@@ -10,7 +10,6 @@ import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.LIST
 import com.squareup.kotlinpoet.MemberName
-import com.squareup.kotlinpoet.NOTHING
 import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.ParameterizedTypeName
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
@@ -34,7 +33,6 @@ import dev.aoddon.connector.http.HttpRequest
 import dev.aoddon.connector.http.HttpResponse
 import dev.aoddon.connector.http.HttpResult
 import io.ktor.client.HttpClient
-import io.ktor.client.features.ResponseException
 import io.ktor.client.request.forms.FormDataContent
 import io.ktor.client.statement.HttpStatement
 import io.ktor.client.utils.EmptyContent
@@ -65,7 +63,6 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       .addFunction(httpRequestHandlerFunctionSpec)
       .addFunction(executeRequestWithInterceptorsFunctionSpec)
       .addFunction(toHttpStatementFunctionSpec)
-      .addFunction(throwableAsHttpResultFunctionSpec)
       .addFunction(firstWriterOfFunctionSpec)
       .addFunction(firstReaderOfFunctionSpec)
       .addFunction(ensureValidBaseUrlFunctionSpec)
@@ -1078,7 +1075,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
               try {
                 intercept()
               } catch (throwable: %T) {
-                throwable.%M($requestParameterName)
+                $requestParameterName.%M(throwable)
               }
             }
           }
@@ -1090,7 +1087,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         ClassNames.HTTP_REQUEST,
         httpResultParameterized,
         ClassNames.THROWABLE,
-        MemberName(packageName, FunctionNames.AS_HTTP_RESULT)
+        MemberName("dev.aoddon.connector.http", "failure")
       )
       .build()
   }
@@ -1114,47 +1111,14 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         return·$clientParameterName.%M {
           method·=·this@${FunctionNames.TO_HTTP_STATEMENT}.method
           url.%M(this@toHttpStatement.url)
-          body·=·bodySupplier()
           headers.appendAll(this@${FunctionNames.TO_HTTP_STATEMENT}.headers)
+          body·=·bodySupplier()
+          %M·=·false
         }
         """.trimIndent(),
         MemberName("io.ktor.client.request", "request"),
-        MemberName("io.ktor.http", "takeFrom")
-      )
-      .build()
-  }
-
-  private val throwableAsHttpResultFunctionSpec: FunSpec = run {
-    val requestParameterName = "request"
-
-    FunSpec.builder(FunctionNames.AS_HTTP_RESULT)
-      .addAnnotation(suppressNothingToInlineAnnotationSpec)
-      .addModifiers(KModifier.PRIVATE, KModifier.INLINE, KModifier.SUSPEND)
-      .receiver(ClassNames.THROWABLE)
-      .addParameter(
-        ParameterSpec(
-          requestParameterName,
-          ClassNames.HTTP_REQUEST
-        )
-      )
-      .returns(ClassNames.HTTP_RESULT.parameterizedBy(NOTHING))
-      .addCode(
-        """
-        if·(this !is %T)·return·request.%M(this)
-        return·request.%M(
-          status·=·response.status,
-          headers·=·response.headers,
-          body·=·response.content.%M().%M(),
-          protocol·=·response.version,
-          timestamp·=·response.responseTime.timestamp,
-          requestTimestamp·=·response.requestTime.timestamp
-        )
-        """.trimIndent(),
-        ClassNames.Ktor.RESPONSE_EXCEPTION,
-        MemberName("dev.aoddon.connector.http", "failure"),
-        MemberName("dev.aoddon.connector.http", "responseError"),
-        MemberName("io.ktor.utils.io", "readRemaining"),
-        MemberName("io.ktor.utils.io.core", "readBytes"),
+        MemberName("io.ktor.http", "takeFrom"),
+        MemberName("io.ktor.client.features", "expectSuccess")
       )
       .build()
   }
@@ -1612,7 +1576,6 @@ private object ClassNames {
     val HTTP_METHOD = HttpMethod::class.asClassName()
     val HTTP_STATEMENT = HttpStatement::class.asClassName()
     val PARAMETERS_BUILDER = ParametersBuilder::class.asClassName()
-    val RESPONSE_EXCEPTION = ResponseException::class.asClassName()
     val URL = Url::class.asClassName()
     val URL_BUILDER = URLBuilder::class.asClassName()
   }
@@ -1641,7 +1604,6 @@ private object ParameterNames {
 }
 
 private object FunctionNames {
-  const val AS_HTTP_RESULT = "asHttpResult"
   const val DYNAMIC_URL = "dynamicUrl"
   const val ENSURE_NO_PATH_TRAVERSAL = "ensureNoPathTraversal"
   const val ENSURE_VALID_BASE_URL = "ensureValidBaseUrl"
