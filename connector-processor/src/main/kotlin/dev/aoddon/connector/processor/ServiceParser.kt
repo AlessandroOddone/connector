@@ -124,13 +124,13 @@ public class ServiceParser(private val logger: KSPLogger) {
         val parameterAnnotations = parameter.findHttpParameterAnnotations()
         if (parameterAnnotations.isEmpty()) {
           logger.error(
-            "All parameters in a @Service function must have an appropriate connector annotation.",
+            "All parameters in a @Service function must have an appropriate Connector annotation.",
             parameter
           )
         }
         if (parameterAnnotations.size > 1) {
           logger.error(
-            "Multiple connector annotations are not allowed on the same parameter.",
+            "Multiple Connector annotations are not allowed on the same parameter.",
             parameter
           )
         }

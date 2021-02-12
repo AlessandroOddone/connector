@@ -1,8 +1,6 @@
-const val GROUP = "dev.aoddon"
-const val VERSION = "0.1-SNAPSHOT"
-
 object Versions {
   const val COROUTINES = "1.4.2"
+  const val DOKKA = "1.4.20"
   const val KOTLIN = "1.4.21"
   const val KOTLIN_POET = "1.7.2"
   const val KOTLIN_COMPILE_TESTING = "1.3.4"
@@ -10,6 +8,7 @@ object Versions {
   const val KSP = "1.4.20-dev-experimental-20210203"
   const val KTLINT_GRADLE_PLUGIN = "9.4.1"
   const val KTOR = "1.5.1"
+  const val MAVEN_PUBLISH_PLUGIN = "0.14.0"
 }
 
 object Dependencies {

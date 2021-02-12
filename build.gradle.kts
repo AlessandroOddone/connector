@@ -9,19 +9,19 @@ plugins {
   kotlin("plugin.serialization") version Versions.KOTLIN apply false
   id("com.google.devtools.ksp") version Versions.KSP apply false
   id("org.jlleitschuh.gradle.ktlint") version Versions.KTLINT_GRADLE_PLUGIN apply false
+  id("com.vanniktech.maven.publish") version Versions.MAVEN_PUBLISH_PLUGIN apply false
+  id("org.jetbrains.dokka") version Versions.DOKKA apply false
+  id("signing")
 }
 
 subprojects {
-  group = GROUP
-  version = VERSION
-
   repositories {
     gradlePluginPortal()
-    jcenter()
+    mavenCentral()
     google()
     maven { url = uri("https://kotlin.bintray.com/kotlinx/") }
     maven { url = uri("https://dl.bintray.com/kotlin/kotlin-eap") }
-    mavenCentral()
+    jcenter()
     mavenLocal()
   }
 
@@ -86,16 +86,8 @@ subprojects {
   }
 
   if (!isInternal()) {
-    apply(plugin = "maven-publish")
-    configure<PublishingExtension> {
-      publications {
-        register<MavenPublication>("maven") {
-          groupId = GROUP
-          artifactId = project.name
-          version = VERSION
-        }
-      }
-    }
+    apply(plugin = "com.vanniktech.maven.publish")
+    apply(plugin = "org.jetbrains.dokka")
   }
 }
 
@@ -103,6 +95,15 @@ subprojects {
   apply(plugin = "org.jlleitschuh.gradle.ktlint")
   configure<KtlintExtension> {
     enableExperimentalRules.set(true)
+  }
+}
+
+signing {
+  if (project.hasProperty("SIGNING_PRIVATE_KEY") && project.hasProperty("SIGNING_PASSWORD")) {
+    useInMemoryPgpKeys(
+      project.property("SIGNING_PRIVATE_KEY").toString(),
+      project.property("SIGNING_PASSWORD").toString()
+    )
   }
 }
 

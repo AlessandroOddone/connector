@@ -283,7 +283,7 @@ class ServiceValidation {
 
     sourceFile.runTestCompilation {
       assertKspErrors(
-        "All parameters in a @Service function must have an appropriate connector annotation." atLine 7
+        "All parameters in a @Service function must have an appropriate Connector annotation." atLine 7
       )
     }
   }
@@ -305,7 +305,7 @@ class ServiceValidation {
 
     sourceFile.runTestCompilation {
       assertKspErrors(
-        "Multiple connector annotations are not allowed on the same parameter." atLine 7
+        "Multiple Connector annotations are not allowed on the same parameter." atLine 7
       )
     }
   }
