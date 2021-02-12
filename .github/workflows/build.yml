@@ -1,0 +1,36 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - '*'
+
+jobs:
+  build:
+    name: JDK ${{ matrix.java_version }}
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        java_version:
+          - 1.8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Install JDK ${{ matrix.java_version }}
+        uses: actions/setup-java@v1
+        with:
+          java-version: ${{ matrix.java_version }}
+
+      - name: Ktlint Check
+        run: ./gradlew ktlintCheck
+
+      - name: Test
+        run: ./gradlew jvmTest test
