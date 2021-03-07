@@ -1,9 +1,6 @@
-package dev.aoddon.connector
+package dev.aoddon.connector.http
 
-import dev.aoddon.connector.http.Field
-import dev.aoddon.connector.http.FieldMap
-import dev.aoddon.connector.http.FormUrlEncoded
-import dev.aoddon.connector.http.POST
+import dev.aoddon.connector.Service
 import dev.aoddon.connector.util.assertHttpLogMatches
 import dev.aoddon.connector.util.hasRequestBody
 import dev.aoddon.connector.util.runHttpTest
@@ -17,7 +14,7 @@ import org.junit.Test
 
 private val BASE_URL = Url("https://formUrlEncoded/")
 
-@Service interface HttpFormUrlEncodedTestService {
+@Service interface FormUrlEncodedTestService {
   @POST("post")
   @FormUrlEncoded
   suspend fun formUrlEncodedTextField(@Field("f") text: String)
@@ -99,9 +96,9 @@ private val BASE_URL = Url("https://formUrlEncoded/")
   )
 }
 
-class HttpFormUrlEncoded {
+class FormUrlEncodedTest {
   @Test fun `@FormUrlEncoded text @Field`() = runHttpTest {
-    val service = HttpFormUrlEncodedTestService(BASE_URL, httpClient)
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
     service.formUrlEncodedTextField("value")
     assertHttpLogMatches {
       hasUrl("https://formUrlEncoded/post")
@@ -113,7 +110,7 @@ class HttpFormUrlEncoded {
   }
 
   @Test fun `@FormUrlEncoded Any @Field`() = runHttpTest {
-    val service = HttpFormUrlEncodedTestService(BASE_URL, httpClient)
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
     service.formUrlEncodedAnyField(
       object : Any() {
         override fun toString() = "abc"
@@ -129,7 +126,7 @@ class HttpFormUrlEncoded {
   }
 
   @Test fun `@FormUrlEncoded String Iterable @Field`() = runHttpTest {
-    val service = HttpFormUrlEncodedTestService(BASE_URL, httpClient)
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
 
     service.formUrlEncodedStringIterableField(emptyList())
     service.formUrlEncodedStringCollectionField(listOf("1", "2", "3"))
@@ -169,7 +166,7 @@ class HttpFormUrlEncoded {
   }
 
   @Test fun `@FormUrlEncoded Any Iterable @Field`() = runHttpTest {
-    val service = HttpFormUrlEncodedTestService(BASE_URL, httpClient)
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
 
     service.formUrlEncodedAnyIterableField(emptyList())
     service.formUrlEncodedAnyCollectionField(
@@ -233,7 +230,7 @@ class HttpFormUrlEncoded {
   }
 
   @Test fun `@FormUrlEncoded @FieldMap of Strings`() = runHttpTest {
-    val service = HttpFormUrlEncodedTestService(BASE_URL, httpClient)
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
 
     service.formUrlEncodedStringMap(emptyMap())
     service.formUrlEncodedStringMap(mapOf("a" to "1"))
@@ -265,7 +262,7 @@ class HttpFormUrlEncoded {
   }
 
   @Test fun `@FormUrlEncoded @FieldMap of Any`() = runHttpTest {
-    val service = HttpFormUrlEncodedTestService(BASE_URL, httpClient)
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
 
     service.formUrlEncodedAnyMap(emptyMap())
     service.formUrlEncodedAnyMap(
@@ -312,7 +309,7 @@ class HttpFormUrlEncoded {
   }
 
   @Test fun `@FormUrlEncoded @FieldMap of String Iterable`() = runHttpTest {
-    val service = HttpFormUrlEncodedTestService(BASE_URL, httpClient)
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
 
     service.formUrlEncodedMapOfIterableString(emptyMap())
     service.formUrlEncodedMapOfIterableString(
@@ -341,7 +338,7 @@ class HttpFormUrlEncoded {
   }
 
   @Test fun `@FormUrlEncoded @FieldMap of Any Iterable`() = runHttpTest {
-    val service = HttpFormUrlEncodedTestService(BASE_URL, httpClient)
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
 
     service.formUrlEncodedMapOfIterableAny(emptyMap())
     service.formUrlEncodedMapOfIterableAny(
@@ -381,7 +378,7 @@ class HttpFormUrlEncoded {
   }
 
   @Test fun `@FormUrlEncoded StringValues @FieldMap`() = runHttpTest {
-    val service = HttpFormUrlEncodedTestService(BASE_URL, httpClient)
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
 
     service.formUrlEncodedStringValues(StringValues.Empty)
     service.formUrlEncodedStringValues(Parameters.Empty)
@@ -418,7 +415,7 @@ class HttpFormUrlEncoded {
   }
 
   @Test fun `@FormUrlEncoded multiple parameters`() = runHttpTest {
-    val service = HttpFormUrlEncodedTestService(BASE_URL, httpClient)
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
 
     service.formUrlEncodedMultipleParameters("a", "b", "c", "d")
 
@@ -432,7 +429,7 @@ class HttpFormUrlEncoded {
   }
 
   @Test fun `@FormUrlEncoded nullable parameters`() = runHttpTest {
-    val service = HttpFormUrlEncodedTestService(BASE_URL, httpClient)
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
 
     service.formUrlEncodedNullableTypes(null, null, null, null, null, null)
     service.formUrlEncodedNullableTypes(
@@ -463,7 +460,7 @@ class HttpFormUrlEncoded {
   }
 
   @Test fun `@FormUrlEncoded iterables with null values`() = runHttpTest {
-    val service = HttpFormUrlEncodedTestService(BASE_URL, httpClient)
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
 
     service.formUrlEncodedNullableTypes(
       null,

@@ -1,12 +1,11 @@
-package dev.aoddon.connector
+package dev.aoddon.connector.http
 
-import dev.aoddon.connector.http.GET
-import dev.aoddon.connector.http.Path
-import dev.aoddon.connector.http.Query
-import dev.aoddon.connector.http.QueryMap
+import dev.aoddon.connector.Service
+import dev.aoddon.connector.URL
 import dev.aoddon.connector.test.util.assertThrows
 import dev.aoddon.connector.util.assertHttpLogMatches
 import dev.aoddon.connector.util.runHttpTest
+import io.ktor.client.request.forms.submitFormWithBinaryData
 import io.ktor.http.Parameters
 import io.ktor.http.ParametersBuilder
 import io.ktor.http.URLBuilder
@@ -18,7 +17,7 @@ import org.junit.Test
 
 private val BASE_URL = Url("https://urls/base/")
 
-@Service interface HttpUrlsTestService {
+@Service interface UrlsTestService {
   @GET("relative/path") suspend fun relativePath()
 
   @GET("/absolute/path") suspend fun absolutePath()
@@ -167,33 +166,35 @@ private val BASE_URL = Url("https://urls/base/")
   suspend fun queryParameterStringValues(@QueryMap stringValues: StringValues)
 }
 
-class HttpUrls {
+class UrlsTest {
   @Test fun `Relative path`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.relativePath()
     assertHttpLogMatches { hasUrl("https://urls/base/relative/path") }
+
+    httpClient.submitFormWithBinaryData { }
   }
 
   @Test fun `Absolute path`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.absolutePath()
     assertHttpLogMatches { hasUrl("https://urls/absolute/path") }
   }
 
   @Test fun `Protocol-relative path`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.protocolRelativePath()
     assertHttpLogMatches { hasUrl("https://protocol/relative/path") }
   }
 
   @Test fun `Full URL`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.fullUrl()
     assertHttpLogMatches { hasUrl("https://full/url") }
   }
 
   @Test fun `String @Path parameter`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.stringPathParameters(
       pathParam1 = "value1",
       pathParam2 = "value2"
@@ -202,7 +203,7 @@ class HttpUrls {
   }
 
   @Test fun `'toString' of @Path object argument is used as the path parameter value`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.anyPathParameters(
       pathParam1 = object : Any() {
         override fun toString() = "value1"
@@ -215,13 +216,13 @@ class HttpUrls {
   }
 
   @Test fun `@Path parameter that is not a full path segment`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.nonFullSegmentPathParameter(fruit = "Banana")
     assertHttpLogMatches { hasUrl("https://urls/base/fruit/allBananas") }
   }
 
   @Test fun `Multiple segments in @Path argument`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.stringPathParameters(
       pathParam1 = "multiple/segments/v1",
       pathParam2 = "v2"
@@ -230,13 +231,13 @@ class HttpUrls {
   }
 
   @Test fun `Multiple @Path parameters with the same name`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.multiplePathParametersSameName(pathParam = "same")
     assertHttpLogMatches { hasUrl("https://urls/base/multiple/same/path/same/parameters/same") }
   }
 
   @Test fun `String @Query parameter`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.stringQueryParameters(
       queryParam1 = "value1",
       queryParam2 = "value2"
@@ -245,7 +246,7 @@ class HttpUrls {
   }
 
   @Test fun `'toString' of @Query object argument is used as the query parameter value`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.nullableAnyQueryParameters(
       queryParam1 = object : Any() {
         override fun toString() = "value1"
@@ -258,7 +259,7 @@ class HttpUrls {
   }
 
   @Test fun `If the @Query argument is null, the query parameter is omitted`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.nullableAndNotNullableAnyQueryParameters(
       queryParam1 = null,
       queryParam2 = object : Any() {
@@ -269,7 +270,7 @@ class HttpUrls {
   }
 
   @Test fun `If all @Query arguments are null, the query string is omitted`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.nullableAnyQueryParameters(
       queryParam1 = null,
       queryParam2 = null
@@ -278,7 +279,7 @@ class HttpUrls {
   }
 
   @Test fun `Can mix static and dynamic query parameters`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.mixStaticAndDynamicQueryParameters(
       queryParam3 = "dynamic3",
       queryParam4 = "dynamic4"
@@ -289,31 +290,31 @@ class HttpUrls {
   }
 
   @Test fun `Multiple query parameters with the same name, both static and dynamic`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.multipleQueryParametersSameName(queryParam1 = "20", queryParam2 = "30")
     assertHttpLogMatches { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=20&q=30") }
   }
 
   @Test fun `Static query parameter with no value`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.staticQueryParameterWithNoValue()
     assertHttpLogMatches { hasUrl("https://urls/base/static/query/parameter/with/no/value?queryParameter") }
   }
 
   @Test fun `Trailing question mark with no query parameters`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.trailingQuestionMarkNoQueryParameters()
     assertHttpLogMatches { hasUrl("https://urls/base/trailing/question/mark/no/query/parameters?") }
   }
 
   @Test fun `String @URL parameter`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.dynamicStringUrl("test/path?q1=v1&q2=v2")
     assertHttpLogMatches { hasUrl("https://urls/base/test/path?q1=v1&q2=v2") }
   }
 
   @Test fun `Ktor Url @URL parameter`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     val url = URLBuilder()
       .apply {
         protocol = URLProtocol.HTTPS
@@ -332,7 +333,7 @@ class HttpUrls {
   }
 
   @Test fun `'toString' of @URL object argument is used as the request URL`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.dynamicAnyUrl(
       object : Any() {
         override fun toString() = "test/path?q1=v1&q2=v2"
@@ -342,7 +343,7 @@ class HttpUrls {
   }
 
   @Test fun `@Query parameter is appended to @URL`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.dynamicUrlAndDynamicQueryParameter(
       url = "path?static=s",
       dynamicQueryParam = "d"
@@ -351,25 +352,25 @@ class HttpUrls {
   }
 
   @Test fun `@URL providing an absolute path`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.dynamicStringUrl("/dynamic/absolute/path?q1=v1&q2=v2")
     assertHttpLogMatches { hasUrl("https://urls/dynamic/absolute/path?q1=v1&q2=v2") }
   }
 
   @Test fun `@URL providing a protocol-relative path`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.dynamicStringUrl("//dynamic/protocol/relative/path?q1=v1&q2=v2")
     assertHttpLogMatches { hasUrl("https://dynamic/protocol/relative/path?q1=v1&q2=v2") }
   }
 
   @Test fun `@URL providing a full URL`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.dynamicStringUrl("https://dynamic/full/url?q1=v1&q2=v2")
     assertHttpLogMatches { hasUrl("https://dynamic/full/url?q1=v1&q2=v2") }
   }
 
   @Test fun `Encoded @Path parameters`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
 
     service.stringPathParameters(pathParam1 = "v%201", pathParam2 = "%20v%20%202")
     service.dynamicStringUrl("v%201/%20v%20%202")
@@ -381,7 +382,7 @@ class HttpUrls {
   }
 
   @Test fun `Whitespaces in @Path arguments are encoded`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
 
     service.stringPathParameters(pathParam1 = "v 1", pathParam2 = " v  2")
     service.dynamicStringUrl("v 1/ v  2")
@@ -393,25 +394,25 @@ class HttpUrls {
   }
 
   @Test fun `Braces are encoded in the URL if they don't surround a valid parameter`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.invalidPathParameterSurroundedByBraces(pathParam1 = "v1")
     assertHttpLogMatches { hasUrl("https://urls/base/string/path/parameters/p1/v1/p2/%7Bp2,p3%7D") }
   }
 
   @Test fun `Question mark in @Query argument is encoded`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.queryParameterWithQuestionMark(queryParam = "v?")
     assertHttpLogMatches { hasUrl("https://urls/base/query/parameter/with/question/mark?q%3F=v%3F") }
   }
 
   @Test fun `Hash in @Query argument is encoded`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.queryParameterWithQuestionMark(queryParam = "v#")
     assertHttpLogMatches { hasUrl("https://urls/base/query/parameter/with/question/mark?q%3F=v%23") }
   }
 
   @Test fun `Ampersand in @Query argument is encoded`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.queryParameterWithQuestionMark(queryParam = "v&")
     assertHttpLogMatches { hasUrl("https://urls/base/query/parameter/with/question/mark?q%3F=v%26") }
   }
@@ -420,7 +421,7 @@ class HttpUrls {
     assertThrows<IllegalArgumentException>(
       message = "Base URL protocol must be HTTP or HTTPS. Found: ftp://urls/base/"
     ) {
-      HttpUrlsTestService(Url("ftp://urls/base/"), httpClient)
+      UrlsTestService(Url("ftp://urls/base/"), httpClient)
     }
   }
 
@@ -428,7 +429,7 @@ class HttpUrls {
     assertThrows<IllegalArgumentException>(
       message = "Base URL should end in '/'. Found: https://urls/base"
     ) {
-      HttpUrlsTestService(
+      UrlsTestService(
         URLBuilder(BASE_URL).apply { encodedPath = BASE_URL.encodedPath.removeSuffix("/") }.build(),
         httpClient,
         emptyList()
@@ -440,7 +441,7 @@ class HttpUrls {
     assertThrows<IllegalArgumentException>(
       message = "Base URL should not have query parameters. Found: https://urls/base/?q=%2F"
     ) {
-      HttpUrlsTestService(
+      UrlsTestService(
         URLBuilder(BASE_URL).apply { parameters.append("q", "/") }.build(),
         httpClient,
         emptyList()
@@ -452,7 +453,7 @@ class HttpUrls {
     assertThrows<IllegalArgumentException>(
       message = "Base URL fragment should be empty. Found: https://urls/base/#/"
     ) {
-      HttpUrlsTestService(
+      UrlsTestService(
         URLBuilder(BASE_URL).apply { fragment = "/" }.build(),
         httpClient,
         emptyList()
@@ -464,7 +465,7 @@ class HttpUrls {
     assertThrows<IllegalArgumentException>(
       message = "Base URL should end in '/'. Found: https://urls/base/?"
     ) {
-      HttpUrlsTestService(
+      UrlsTestService(
         URLBuilder(BASE_URL).apply { trailingQuery = true }.build(),
         httpClient,
         emptyList()
@@ -473,7 +474,7 @@ class HttpUrls {
   }
 
   @Test fun `@Path is not allowed to perform path traversal`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
 
     suspend fun assertForbiddenPathTraversal(value: String) {
       assertThrows<IllegalArgumentException>(
@@ -509,7 +510,7 @@ class HttpUrls {
   }
 
   @Test fun `Path traversal dots are allowed in @Path if they are not a full segment`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
 
     service.stringPathParameters(pathParam1 = "v1", pathParam2 = "a/b/.../")
     service.stringPathParameters(pathParam1 = "v1", pathParam2 = "a/b/c../")
@@ -563,13 +564,13 @@ class HttpUrls {
   }
 
   @Test fun `Dollar signs in path are correctly escaped`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.pathContainingDollarSigns(parameter = "$")
     assertHttpLogMatches { hasUrl("https://urls/base/\$pa\$th\$/\$cont\$aining\$/\$dol\$lar\$/\$si\$gns\$/\$\$\$/") }
   }
 
   @Test fun `All escape sequences in path are correctly handled`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
     service.pathContainingAllEscapeSequences(parameter = "$")
     assertHttpLogMatches {
       hasUrl("https://urls/base/\$pa%09th%08/%0Acont%0Daining'/%5Ca%22ll%22/%5Ces'cape\$/seq%08ue%0Dnces%09/%0A\$\$/")
@@ -577,7 +578,7 @@ class HttpUrls {
   }
 
   @Test fun `@Query iterables with non-null values`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
 
     // [10]
     service.iterableOfStringQueryParametersWithSameName(emptyList())
@@ -663,7 +664,7 @@ class HttpUrls {
   }
 
   @Test fun `@Query iterables with nullable values`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
 
     // [10]
     service.queryParameterIterableNullableTypes(
@@ -697,7 +698,7 @@ class HttpUrls {
   }
 
   @Test fun `@QueryMap of Strings`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
 
     service.queryParameterStringMap(emptyMap())
     service.queryParameterStringMap(mapOf("q" to "1"))
@@ -717,7 +718,7 @@ class HttpUrls {
   }
 
   @Test fun `@QueryMap of Any`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
 
     service.queryParameterAnyMap(emptyMap())
     service.queryParameterAnyMap(
@@ -752,7 +753,7 @@ class HttpUrls {
   }
 
   @Test fun `@QueryMap of String Iterable`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
 
     service.queryParameterMapOfIterableString(emptyMap())
     service.queryParameterMapOfIterableString(
@@ -773,7 +774,7 @@ class HttpUrls {
   }
 
   @Test fun `@QueryMap of Any Iterable`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
 
     service.queryParameterMapOfIterableAny(emptyMap())
     service.queryParameterMapOfIterableAny(
@@ -805,7 +806,7 @@ class HttpUrls {
   }
 
   @Test fun `StringValues @QueryMap`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
 
     service.queryParameterStringValues(StringValues.Empty)
     service.queryParameterStringValues(Parameters.Empty)
@@ -830,7 +831,7 @@ class HttpUrls {
   }
 
   @Test fun `@QueryMap iterable values with null items`() = runHttpTest {
-    val service = HttpUrlsTestService(BASE_URL, httpClient)
+    val service = UrlsTestService(BASE_URL, httpClient)
 
     service.queryParameterIterableNullableTypes(
       null,

@@ -1,7 +1,7 @@
 package dev.aoddon.connector.http
 
-/**
- * Http Methods
+/*
+ * HTTP Methods
  */
 
 @Target(AnnotationTarget.FUNCTION)
@@ -28,7 +28,7 @@ public annotation class PUT(val url: String = "")
 @Target(AnnotationTarget.FUNCTION)
 public annotation class HTTP(val method: String, val url: String = "")
 
-/**
+/*
  * URL
  */
 
@@ -41,7 +41,7 @@ public annotation class Query(val name: String)
 @Target(AnnotationTarget.VALUE_PARAMETER)
 public annotation class QueryMap
 
-/**
+/*
  * Headers
  */
 
@@ -54,15 +54,15 @@ public annotation class Header(val name: String)
 @Target(AnnotationTarget.VALUE_PARAMETER)
 public annotation class HeaderMap
 
-/**
+/*
  * Body
  */
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
 public annotation class Body(val contentType: String)
 
-/**
- * Forms
+/*
+ * URL Encoded Forms
  */
 
 @Target(AnnotationTarget.FUNCTION)
@@ -74,11 +74,18 @@ public annotation class Field(val name: String)
 @Target(AnnotationTarget.VALUE_PARAMETER)
 public annotation class FieldMap
 
+/*
+ * Multipart
+ */
+
 @Target(AnnotationTarget.FUNCTION)
-public annotation class Multipart
+public annotation class Multipart(val subtype: String = "form-data")
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
-public annotation class Part(val name: String = "")
+public annotation class Part(val contentType: String = "", val formFieldName: String = "")
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
-public annotation class PartMap
+public annotation class PartIterable(val contentType: String = "", val formFieldName: String = "")
+
+@Target(AnnotationTarget.VALUE_PARAMETER)
+public annotation class PartMap(val contentType: String)

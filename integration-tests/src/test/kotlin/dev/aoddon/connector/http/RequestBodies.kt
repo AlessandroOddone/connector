@@ -1,22 +1,21 @@
-package dev.aoddon.connector
+package dev.aoddon.connector.http
 
-import dev.aoddon.connector.http.Body
-import dev.aoddon.connector.http.HttpBody
-import dev.aoddon.connector.http.HttpContentSerializer
-import dev.aoddon.connector.http.HttpResult
-import dev.aoddon.connector.http.POST
+import dev.aoddon.connector.Service
 import dev.aoddon.connector.test.util.assertIs
 import dev.aoddon.connector.test.util.assertThrows
 import dev.aoddon.connector.util.HttpLogEntry
-import dev.aoddon.connector.util.JsonContentSerializer
+import dev.aoddon.connector.util.JsonBodySerializer
+import dev.aoddon.connector.util.Node
+import dev.aoddon.connector.util.Wrapper
 import dev.aoddon.connector.util.assertHttpLogMatches
+import dev.aoddon.connector.util.hasRequestBody
 import dev.aoddon.connector.util.runHttpTest
 import io.ktor.http.ContentType
 import io.ktor.http.Url
 import io.ktor.http.content.OutgoingContent
+import io.ktor.http.withCharset
 import io.ktor.utils.io.ByteReadChannel
 import kotlinx.serialization.DeserializationStrategy
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.json.JsonArray
@@ -29,7 +28,7 @@ import kotlin.test.assertEquals
 private val BASE_URL = Url("https://requestBodies/")
 private const val JSON = "application/json"
 
-@Service interface HttpRequestBodiesTestService {
+@Service interface RequestBodiesTestService {
   @POST("postBoolean") suspend fun postBoolean(@Body(JSON) body: Boolean)
   @POST("postByte") suspend fun postByte(@Body(JSON) body: Byte)
   @POST("postChar") suspend fun postChar(@Body(JSON) body: Char)
@@ -69,14 +68,17 @@ private const val JSON = "application/json"
   @POST("postNullableMap") suspend fun postNullableMap(@Body(JSON) body: Map<String, Node>?)
 
   @POST("postGif") suspend fun postGif(@Body("image/gif") body: String)
+  @POST("postContentTypeWithCharset") suspend fun postContentTypeWithCharset(
+    @Body("$JSON; charset=UTF-8") body: String
+  )
 
   @POST("postHttpBody") suspend fun postHttpBody(@Body(JSON) body: HttpBody<String>)
   @POST("postNullableHttpBody") suspend fun postNullableHttpBody(@Body(JSON) body: HttpBody<String>?)
 }
 
-class HttpRequestBodies {
+class RequestBodiesTest {
   @Test fun `Boolean @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postBoolean(true)
     service.postBoolean(false)
     assertHttpLogMatches(
@@ -86,55 +88,55 @@ class HttpRequestBodies {
   }
 
   @Test fun `Byte @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postByte(10)
     assertHttpLogMatches { hasJsonRequestBody("10") }
   }
 
   @Test fun `Char @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postChar('a')
     assertHttpLogMatches { hasJsonRequestBody("\"a\"") }
   }
 
   @Test fun `Double @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postDouble(-10.7)
     assertHttpLogMatches { hasJsonRequestBody("-10.7") }
   }
 
   @Test fun `Float @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postFloat(2.4f)
     assertHttpLogMatches { hasJsonRequestBody("2.4") }
   }
 
   @Test fun `Int @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postInt(-10)
     assertHttpLogMatches { hasJsonRequestBody("-10") }
   }
 
   @Test fun `Long @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postLong(10)
     assertHttpLogMatches { hasJsonRequestBody("10") }
   }
 
   @Test fun `Short @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postShort(0)
     assertHttpLogMatches { hasJsonRequestBody("0") }
   }
 
   @Test fun `String @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postString("aString")
     assertHttpLogMatches { hasJsonRequestBody("\"aString\"") }
   }
 
   @Test fun `BooleanArray @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postBooleanArray(booleanArrayOf())
     service.postBooleanArray(booleanArrayOf(true))
     service.postBooleanArray(booleanArrayOf(true, false))
@@ -146,7 +148,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `ByteArray @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postByteArray(byteArrayOf())
     service.postByteArray(byteArrayOf(-10))
     service.postByteArray(byteArrayOf(10, -11))
@@ -158,7 +160,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `CharArray @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postCharArray(charArrayOf())
     service.postCharArray(charArrayOf('a'))
     service.postCharArray(charArrayOf('a', 'b'))
@@ -170,7 +172,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `DoubleArray @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postDoubleArray(doubleArrayOf())
     service.postDoubleArray(doubleArrayOf(10.7))
     service.postDoubleArray(doubleArrayOf(10.7, -10.8))
@@ -182,7 +184,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `FloatArray @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postFloatArray(floatArrayOf())
     service.postFloatArray(floatArrayOf(-2.4f))
     service.postFloatArray(floatArrayOf(2.4f, 2.5f))
@@ -194,7 +196,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `IntArray @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postIntArray(intArrayOf())
     service.postIntArray(intArrayOf(10))
     service.postIntArray(intArrayOf(10, 11))
@@ -206,7 +208,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `LongArray @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postLongArray(longArrayOf())
     service.postLongArray(longArrayOf(-10))
     service.postLongArray(longArrayOf(10, -11))
@@ -218,7 +220,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `ShortArray @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postShortArray(shortArrayOf())
     service.postShortArray(shortArrayOf(10))
     service.postShortArray(shortArrayOf(-10, 11))
@@ -230,7 +232,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `@Serializable @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     val root = Node(
       id = "1",
       payload = 100,
@@ -250,7 +252,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `@Serializable with generic argument @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postSerializableWithGeneric(Wrapper("aString"))
     assertHttpLogMatches {
       hasJsonRequestBody(
@@ -262,7 +264,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `JsonElement @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     val jsonObject = buildJsonObject {
       put("id", JsonPrimitive("1"))
       put("values", JsonArray(listOf(JsonPrimitive(1), JsonPrimitive(2))))
@@ -294,7 +296,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `Array @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     val fistChild = Node(id = "2", payload = 200, children = emptyList())
     val secondChild = Node(id = "3", payload = 300, children = emptyList())
     val root = Node(id = "1", payload = 100, children = listOf(fistChild, secondChild))
@@ -323,7 +325,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `List @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     service.postList(emptyList())
     service.postList(listOf(Wrapper("a")))
@@ -349,7 +351,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `Set @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     service.postSet(emptySet())
     service.postSet(setOf(-1))
@@ -363,7 +365,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `Map @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     service.postMap(emptyMap())
     service.postMap(
@@ -399,7 +401,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `MapEntry @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postMapEntry(
       object : Map.Entry<String, Boolean> {
         override val key = "key"
@@ -412,7 +414,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `Pair @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postPair(1_000L to Node(id = "id", payload = 1, children = emptyList()))
     assertHttpLogMatches {
       hasJsonRequestBody(
@@ -424,7 +426,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `Triple @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     service.postTriple(Triple("first", Wrapper("second"), -10.0))
     assertHttpLogMatches {
       hasJsonRequestBody(
@@ -436,7 +438,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `Null @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     service.postNullableString(null)
     service.postNullableIntArray(null)
@@ -454,7 +456,7 @@ class HttpRequestBodies {
   }
 
   @Test fun `HttpBody @Body`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     service.postHttpBody(HttpBody("12345"))
     service.postNullableHttpBody(HttpBody("12345"))
@@ -468,32 +470,42 @@ class HttpRequestBodies {
   }
 
   @Test fun `No serializer for @Body Content-Type error`() = runHttpTest {
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     assertThrows<IllegalStateException>(
-      message = "No suitable HttpContentSerializer found for writing Content-Type: 'image/gif'"
+      message = "No suitable HttpBodySerializer found for writing Content-Type: 'image/gif'"
     ) {
       service.postGif("gif")
     }
   }
 
+  @Test fun `@Body Content-Type with Charset parameter`() = runHttpTest {
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+
+    service.postContentTypeWithCharset("text")
+
+    assertHttpLogMatches {
+      hasRequestBody("\"text\"", ContentType.Application.Json.withCharset(Charsets.UTF_8))
+    }
+  }
+
   @Test fun `@Body serialization error`() = runHttpTest {
-    val throwingSerializer = object : HttpContentSerializer {
+    val throwingSerializer = object : HttpBodySerializer {
       override fun canWrite(contentType: ContentType) = true
       override fun canRead(contentType: ContentType?) = true
 
       override fun <T> write(
         serializationStrategy: SerializationStrategy<T>,
-        content: T,
+        body: T,
         contentType: ContentType
       ): OutgoingContent = throw SerializationException("oops")
 
       override suspend fun <T> read(
         deserializationStrategy: DeserializationStrategy<T>,
-        content: ByteReadChannel,
+        body: ByteReadChannel,
         contentType: ContentType?
       ): T = throw SerializationException("oops")
     }
-    val service = HttpRequestBodiesTestService(BASE_URL, httpClient, listOf(throwingSerializer))
+    val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(throwingSerializer))
 
     assertThrows<SerializationException>(message = "oops") { service.postString("s") }
 
@@ -502,18 +514,6 @@ class HttpRequestBodies {
     assertIs<SerializationException>(result.exception)
     assertEquals("oops", result.exception.message)
   }
-}
-
-@Serializable
-data class Node(
-  val id: String,
-  val payload: Int,
-  val children: List<Node>
-)
-
-@Serializable
-data class Wrapper<T>(val value: T) {
-  override fun toString() = value.toString()
 }
 
 private fun HttpLogEntry.MatcherBuilder.hasJsonRequestBody(bytes: ByteArray) {

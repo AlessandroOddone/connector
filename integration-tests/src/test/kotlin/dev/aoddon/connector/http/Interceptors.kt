@@ -1,13 +1,7 @@
-package dev.aoddon.connector
+package dev.aoddon.connector.http
 
-import dev.aoddon.connector.http.Body
-import dev.aoddon.connector.http.HttpInterceptor
-import dev.aoddon.connector.http.HttpResult
-import dev.aoddon.connector.http.POST
-import dev.aoddon.connector.http.copy
-import dev.aoddon.connector.http.proceed
-import dev.aoddon.connector.http.success
-import dev.aoddon.connector.util.JsonContentSerializer
+import dev.aoddon.connector.Service
+import dev.aoddon.connector.util.JsonBodySerializer
 import dev.aoddon.connector.util.assertHttpLogMatches
 import dev.aoddon.connector.util.hasRequestBody
 import dev.aoddon.connector.util.respondJson
@@ -26,11 +20,11 @@ import kotlin.test.assertEquals
 
 private val BASE_URL = Url("https://interceptors/")
 
-@Service interface HttpInterceptorsTestService {
+@Service interface InterceptorsTestService {
   @POST("post") suspend fun post(@Body("application/json") request: String): String
 }
 
-class HttpInterceptors {
+class InterceptorsTest {
   @Test fun `Chain of interceptors`() = runHttpTest {
     val events = mutableListOf<String>()
 
@@ -43,10 +37,10 @@ class HttpInterceptors {
       }
     }
 
-    val service = HttpInterceptorsTestService(
+    val service = InterceptorsTestService(
       BASE_URL,
       httpClient,
-      httpContentSerializers = listOf(JsonContentSerializer),
+      httpBodySerializers = listOf(JsonBodySerializer),
       httpInterceptors = listOf(
         createInterceptor("first"),
         createInterceptor("second")
@@ -80,10 +74,10 @@ class HttpInterceptors {
       }
     }
 
-    val service = HttpInterceptorsTestService(
+    val service = InterceptorsTestService(
       BASE_URL,
       httpClient,
-      httpContentSerializers = listOf(JsonContentSerializer),
+      httpBodySerializers = listOf(JsonBodySerializer),
       httpInterceptors = listOf(interceptor)
     )
 
@@ -110,10 +104,10 @@ class HttpInterceptors {
       }
     }
 
-    val service = HttpInterceptorsTestService(
+    val service = InterceptorsTestService(
       BASE_URL,
       httpClient,
-      httpContentSerializers = listOf(JsonContentSerializer),
+      httpBodySerializers = listOf(JsonBodySerializer),
       httpInterceptors = listOf(interceptor)
     )
 
