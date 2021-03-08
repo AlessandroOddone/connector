@@ -10,6 +10,7 @@ fun SourceFile.runTestCompilation(block: TestCompilationContext.() -> Unit) {
     symbolProcessors = listOf(ConnectorProcessor())
     sources = listOf(this@runTestCompilation)
     inheritClassPath = true
+    useIR = true
   }
   block(TestCompilationContextImpl(compilation.compile()))
 }
