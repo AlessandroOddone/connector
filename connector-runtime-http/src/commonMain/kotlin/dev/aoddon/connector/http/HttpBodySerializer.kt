@@ -6,20 +6,20 @@ import io.ktor.utils.io.ByteReadChannel
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 
-public interface HttpContentSerializer {
+public interface HttpBodySerializer {
   public fun canWrite(contentType: ContentType): Boolean
 
   public fun canRead(contentType: ContentType?): Boolean
 
   public fun <T> write(
     serializationStrategy: SerializationStrategy<T>,
-    content: T,
+    body: T,
     contentType: ContentType
   ): OutgoingContent
 
   public suspend fun <T> read(
     deserializationStrategy: DeserializationStrategy<T>,
-    content: ByteReadChannel,
+    body: ByteReadChannel,
     contentType: ContentType?
   ): T
 }

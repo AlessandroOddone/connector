@@ -1,9 +1,6 @@
-package dev.aoddon.connector
+package dev.aoddon.connector.http
 
-import dev.aoddon.connector.http.GET
-import dev.aoddon.connector.http.Header
-import dev.aoddon.connector.http.HeaderMap
-import dev.aoddon.connector.http.Headers
+import dev.aoddon.connector.Service
 import dev.aoddon.connector.util.assertHttpLogMatches
 import dev.aoddon.connector.util.runHttpTest
 import io.ktor.client.utils.buildHeaders
@@ -16,7 +13,7 @@ import org.junit.Test
 
 private val BASE_URL = Url("https://headers/")
 
-@Service interface HttpHeadersTestService {
+@Service interface HeadersTestService {
   @GET("get")
   @Headers("header: value")
   suspend fun singleStaticHeader()
@@ -128,9 +125,9 @@ private val BASE_URL = Url("https://headers/")
   )
 }
 
-class HttpHeaders {
+class HeadersTest {
   @Test fun `@Headers defining a single static header`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
     val expectedHeaders = buildHeaders {
       append("header", "value")
       append("Accept-Charset", "UTF-8")
@@ -141,7 +138,7 @@ class HttpHeaders {
   }
 
   @Test fun `@Headers defining multiple static headers`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
     val expectedHeaders = buildHeaders {
       append("header1", "value1")
       append("header2", "value2")
@@ -153,7 +150,7 @@ class HttpHeaders {
   }
 
   @Test fun `@Headers ignores whitespaces around colon`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
     val expectedHeaders = buildHeaders {
       append("header1", "value1")
       append("header2", "value2")
@@ -167,7 +164,7 @@ class HttpHeaders {
   }
 
   @Test fun `String @Header argument is used as the header value`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
     val expectedHeaders = buildHeaders {
       append("header", "value")
       append("Accept-Charset", "UTF-8")
@@ -178,7 +175,7 @@ class HttpHeaders {
   }
 
   @Test fun `'toString' of object @Header argument is used as the header value`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
     val expectedHeaders = buildHeaders {
       append("header", "value")
       append("Accept-Charset", "UTF-8")
@@ -193,7 +190,7 @@ class HttpHeaders {
   }
 
   @Test fun `If the @Header argument is null, the header is omitted`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
     val expectedHeaders = buildHeaders {
       append("Accept-Charset", "UTF-8")
       append("Accept", "*/*")
@@ -203,7 +200,7 @@ class HttpHeaders {
   }
 
   @Test fun `Multiple @Header parameters`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
     val expectedHeaders = buildHeaders {
       append("header1", "value1")
       append("header3", "value3")
@@ -223,9 +220,9 @@ class HttpHeaders {
   }
 
   @Test fun `Multiple @Header parameters with the same name`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
     val expectedHeaders = headersOf(
-      "header" to listOf("dynamic1", "dynamic2", "static"),
+      "header" to listOf("static", "dynamic1", "dynamic2"),
       "Accept-Charset" to listOf("UTF-8"),
       "Accept" to listOf("*/*")
     )
@@ -234,7 +231,7 @@ class HttpHeaders {
   }
 
   @Test fun `@Header iterables with non-null values`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
 
     // [static]
     service.iterableOfStringHeadersWithSameName(emptyList())
@@ -309,7 +306,7 @@ class HttpHeaders {
       {
         hasRequestHeaders(
           headersOf(
-            "header" to listOf("d1", "d2", "static"),
+            "header" to listOf("static", "d1", "d2"),
             "Accept-Charset" to listOf("UTF-8"),
             "Accept" to listOf("*/*")
           )
@@ -327,7 +324,7 @@ class HttpHeaders {
       {
         hasRequestHeaders(
           headersOf(
-            "header" to listOf("d10", "static"),
+            "header" to listOf("static", "d10"),
             "Accept-Charset" to listOf("UTF-8"),
             "Accept" to listOf("*/*")
           )
@@ -346,7 +343,7 @@ class HttpHeaders {
       {
         hasRequestHeaders(
           headersOf(
-            "header" to listOf("d1", "d2", "static"),
+            "header" to listOf("static", "d1", "d2"),
             "Accept-Charset" to listOf("UTF-8"),
             "Accept" to listOf("*/*")
           )
@@ -364,7 +361,7 @@ class HttpHeaders {
       {
         hasRequestHeaders(
           headersOf(
-            "header" to listOf("d10", "static"),
+            "header" to listOf("static", "d10"),
             "Accept-Charset" to listOf("UTF-8"),
             "Accept" to listOf("*/*")
           )
@@ -383,7 +380,7 @@ class HttpHeaders {
       {
         hasRequestHeaders(
           headersOf(
-            "header" to listOf("d1", "d2", "static"),
+            "header" to listOf("static", "d1", "d2"),
             "Accept-Charset" to listOf("UTF-8"),
             "Accept" to listOf("*/*")
           )
@@ -401,7 +398,7 @@ class HttpHeaders {
       {
         hasRequestHeaders(
           headersOf(
-            "header" to listOf("d10", "static"),
+            "header" to listOf("static", "d10"),
             "Accept-Charset" to listOf("UTF-8"),
             "Accept" to listOf("*/*")
           )
@@ -420,7 +417,7 @@ class HttpHeaders {
       {
         hasRequestHeaders(
           headersOf(
-            "header" to listOf("d1", "d2", "static"),
+            "header" to listOf("static", "d1", "d2"),
             "Accept-Charset" to listOf("UTF-8"),
             "Accept" to listOf("*/*")
           )
@@ -438,7 +435,7 @@ class HttpHeaders {
       {
         hasRequestHeaders(
           headersOf(
-            "header" to listOf("d10", "static"),
+            "header" to listOf("static", "d10"),
             "Accept-Charset" to listOf("UTF-8"),
             "Accept" to listOf("*/*")
           )
@@ -448,7 +445,7 @@ class HttpHeaders {
   }
 
   @Test fun `@Header iterables with nullable values`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
 
     // [static]
     service.iterableNullableTypes(
@@ -488,7 +485,7 @@ class HttpHeaders {
       {
         hasRequestHeaders(
           headersOf(
-            "header" to listOf("d1", "d2", "d3", "d4", "d5", "d6", "static"),
+            "header" to listOf("static", "d1", "d2", "d3", "d4", "d5", "d6"),
             "Accept-Charset" to listOf("UTF-8"),
             "Accept" to listOf("*/*")
           )
@@ -498,7 +495,7 @@ class HttpHeaders {
   }
 
   @Test fun `@HeaderMap of Strings`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
 
     service.stringMap(emptyMap())
     service.stringMap(mapOf("header" to "1"))
@@ -537,7 +534,7 @@ class HttpHeaders {
   }
 
   @Test fun `@HeaderMap of Any`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
 
     service.anyMap(emptyMap())
     service.anyMap(
@@ -591,7 +588,7 @@ class HttpHeaders {
   }
 
   @Test fun `@HeaderMap of String Iterable`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
 
     service.mapOfIterableString(emptyMap())
     service.mapOfIterableString(
@@ -625,7 +622,7 @@ class HttpHeaders {
   }
 
   @Test fun `@HeaderMap of Any Iterable`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
 
     service.mapOfIterableAny(emptyMap())
     service.mapOfIterableAny(
@@ -670,7 +667,7 @@ class HttpHeaders {
   }
 
   @Test fun `StringValues @HeaderMap`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
 
     service.stringValues(StringValues.Empty)
     service.stringValues(Parameters.Empty)
@@ -714,7 +711,7 @@ class HttpHeaders {
   }
 
   @Test fun `@HeaderMap iterable values with null items`() = runHttpTest {
-    val service = HttpHeadersTestService(BASE_URL, httpClient)
+    val service = HeadersTestService(BASE_URL, httpClient)
 
     service.iterableNullableTypes(
       null,

@@ -1,15 +1,12 @@
-package dev.aoddon.connector
+package dev.aoddon.connector.http
 
-import dev.aoddon.connector.http.GET
-import dev.aoddon.connector.http.HttpBody
-import dev.aoddon.connector.http.HttpContentSerializer
-import dev.aoddon.connector.http.HttpResponse
-import dev.aoddon.connector.http.HttpResponseException
-import dev.aoddon.connector.http.HttpResult
+import dev.aoddon.connector.Service
 import dev.aoddon.connector.test.util.assertArrayEquals
 import dev.aoddon.connector.test.util.assertIs
 import dev.aoddon.connector.test.util.assertThrows
-import dev.aoddon.connector.util.JsonContentSerializer
+import dev.aoddon.connector.util.JsonBodySerializer
+import dev.aoddon.connector.util.Node
+import dev.aoddon.connector.util.Wrapper
 import dev.aoddon.connector.util.respondJson
 import dev.aoddon.connector.util.runHttpTest
 import io.ktor.client.engine.mock.respond
@@ -41,7 +38,7 @@ import kotlin.test.assertTrue
 
 private val BASE_URL = Url("https://responseBodies/")
 
-@Service interface HttpResponseBodiesTestService {
+@Service interface ResponseBodiesTestService {
   @GET("getBoolean") suspend fun getBoolean(): Boolean
   @GET("getByte") suspend fun getByte(): Byte
   @GET("getChar") suspend fun getChar(): Char
@@ -101,9 +98,9 @@ private val BASE_URL = Url("https://responseBodies/")
   @GET("getStringNullableHttpBody") suspend fun getStringNullableHttpBody(): HttpBody<String>?
 }
 
-class HttpResponseBodies {
+class ResponseBodiesTest {
   @Test fun `Boolean return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("true") }
     assertTrue(service.getBoolean())
@@ -113,55 +110,55 @@ class HttpResponseBodies {
   }
 
   @Test fun `Byte return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler { respondJson("10") }
     assertEquals(10, service.getByte())
   }
 
   @Test fun `Char return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler { respondJson("\"a\"") }
     assertEquals('a', service.getChar())
   }
 
   @Test fun `Double return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler { respondJson("-10.7") }
     assertEquals(-10.7, service.getDouble())
   }
 
   @Test fun `Float return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler { respondJson("2.4") }
     assertEquals(2.4f, service.getFloat())
   }
 
   @Test fun `Int return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler { respondJson("-10") }
     assertEquals(-10, service.getInt())
   }
 
   @Test fun `Long return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler { respondJson("10") }
     assertEquals(10, service.getLong())
   }
 
   @Test fun `Short return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler { respondJson("0") }
     assertEquals(0, service.getShort())
   }
 
   @Test fun `String return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler { respondJson("\"aString\"") }
     assertEquals("aString", service.getString())
   }
 
   @Test fun `BooleanArray return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("[]") }
     assertArrayEquals(booleanArrayOf(), service.getBooleanArray())
@@ -174,7 +171,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `ByteArray return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("[]") }
     assertArrayEquals(byteArrayOf(), service.getByteArray())
@@ -187,7 +184,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `CharArray return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("[]") }
     assertArrayEquals(charArrayOf(), service.getCharArray())
@@ -200,7 +197,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `DoubleArray return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("[]") }
     assertArrayEquals(doubleArrayOf(), service.getDoubleArray())
@@ -213,7 +210,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `FloatArray return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("[]") }
     assertArrayEquals(floatArrayOf(), service.getFloatArray())
@@ -226,7 +223,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `IntArray return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("[]") }
     assertArrayEquals(intArrayOf(), service.getIntArray())
@@ -239,7 +236,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `LongArray return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("[]") }
     assertArrayEquals(longArrayOf(), service.getLongArray())
@@ -252,7 +249,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `ShortArray return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("[]") }
     assertArrayEquals(shortArrayOf(), service.getShortArray())
@@ -265,7 +262,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `@Serializable return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler {
       respondJson(
         """
@@ -287,7 +284,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `@Serializable with generic argument return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler {
       respondJson(
         """
@@ -299,7 +296,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `JsonElement return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("\"text\"") }
     assertEquals(JsonPrimitive("text"), service.getJsonElement())
@@ -335,7 +332,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `Array return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("[]") }
     assertArrayEquals(arrayOf(), service.getArray())
@@ -364,7 +361,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `List return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("[]") }
     assertEquals(emptyList(), service.getList())
@@ -389,7 +386,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `Set return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("[]") }
     assertEquals(emptySet(), service.getSet())
@@ -402,7 +399,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `Map return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("{}") }
     assertEquals(emptyMap(), service.getMap())
@@ -439,7 +436,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `MapEntry return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler { respondJson("{\"key\":true}") }
 
     assertEquals(
@@ -455,7 +452,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `Pair return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler {
       respondJson(
         """
@@ -470,7 +467,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `Triple return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler {
       respondJson(
         """
@@ -482,7 +479,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `Nullable return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("null") }
 
@@ -494,7 +491,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `Deserialized body return type throws on HTTP error`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     val headers = buildHeaders {
       append("ExpectedHeaderName", "ExpectedHeaderValue")
@@ -517,13 +514,13 @@ class HttpResponseBodies {
   }
 
   @Test fun `Deserialized body return type throws on failure`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler { throw IOException("oops") }
     assertThrows<IOException>("oops") { service.getString() }
   }
 
   @Test fun `HttpBody return type`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson("\"12345\"") }
     assertEquals(HttpBody("12345"), service.getStringHttpBody())
@@ -536,7 +533,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpBody return type throws on HTTP error`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     val headers = buildHeaders {
       append("ExpectedHeaderName", "ExpectedHeaderValue")
@@ -559,13 +556,13 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpBody return type throws on failure`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler { throw IOException("oops") }
     assertThrows<IOException>("oops") { service.getStringHttpBody() }
   }
 
   @Test fun `HttpResult return type on success`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     val headers = buildHeaders {
       append(HttpHeaders.ContentType, "application/json")
@@ -590,7 +587,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpResult return type on HTTP error`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     val headers = buildHeaders {
       append("ExpectedHeaderName", "ExpectedHeaderValue")
@@ -614,7 +611,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpResult return type on failure`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { throw IOException("oops") }
     val result: HttpResult<String> = service.getStringHttpResult()
@@ -627,7 +624,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpResult with Unit type argument ignores success body`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     val headers = buildHeaders {
       append(HttpHeaders.ContentType, ContentType.Image.GIF.toString())
@@ -646,7 +643,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpResult with wildcard type argument ignores success body`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     val headers = buildHeaders {
       append(HttpHeaders.ContentType, ContentType.Any.toString())
@@ -665,7 +662,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpResult with HttpBody type argument`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson(content = "true") }
 
@@ -688,7 +685,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpResponse return type on success`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     val headers = buildHeaders {
       append(HttpHeaders.ContentType, "application/json")
@@ -713,7 +710,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpResponse return type on HTTP error`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     val headers = buildHeaders {
       append("ExpectedHeaderName", "ExpectedHeaderValue")
@@ -737,13 +734,13 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpResponse return type throws on failure`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler { throw IOException("oops") }
     assertThrows<IOException>("oops") { service.getStringHttpResponse() }
   }
 
   @Test fun `HttpResponse with Unit type argument ignores success body`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     val headers = buildHeaders {
       append(HttpHeaders.ContentType, ContentType.Image.GIF.toString())
@@ -762,7 +759,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpResponse with wildcard type argument ignores success body`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     val headers = buildHeaders {
       append(HttpHeaders.ContentType, ContentType.Any.toString())
@@ -781,7 +778,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpResponse with HttpBody type argument`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson(content = "true") }
 
@@ -804,7 +801,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpResponseSuccess return type on success`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     val headers = buildHeaders {
       append(HttpHeaders.ContentType, "application/json")
@@ -828,7 +825,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpResponseSuccess return type throws on HTTP error`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     val headers = buildHeaders {
       append("ExpectedHeaderName", "ExpectedHeaderValue")
@@ -845,13 +842,13 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpResponseSuccess return type throws on failure`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
     httpRequestHandler { throw IOException("oops") }
     assertThrows<IOException>("oops") { service.getStringHttpResponseSuccess() }
   }
 
   @Test fun `HttpResponseSuccess with Unit type argument ignores success body`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     val headers = buildHeaders {
       append(HttpHeaders.ContentType, ContentType.Image.GIF.toString())
@@ -868,7 +865,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpResponseSuccess with wildcard type argument ignores success body`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     val headers = buildHeaders {
       append(HttpHeaders.ContentType, ContentType.Any.toString())
@@ -885,7 +882,7 @@ class HttpResponseBodies {
   }
 
   @Test fun `HttpResponseSuccess with HttpBody type argument`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     httpRequestHandler { respondJson(content = "true") }
 
@@ -898,14 +895,14 @@ class HttpResponseBodies {
   }
 
   @Test fun `No serializer for response Content-Type error`() = runHttpTest {
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonContentSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
 
     // Missing Content-Type response header
 
     httpRequestHandler { respond("true", headers = Headers.Empty) }
 
     assertThrows<IllegalStateException>(
-      message = "No suitable HttpContentSerializer found for reading Content-Type: 'null'"
+      message = "No suitable HttpBodySerializer found for reading Content-Type: 'null'"
     ) {
       service.getString()
     }
@@ -914,7 +911,7 @@ class HttpResponseBodies {
       assertIs<HttpResult.Failure>(result)
       assertIs<IllegalStateException>(result.exception)
       assertEquals(
-        "No suitable HttpContentSerializer found for reading Content-Type: 'null'",
+        "No suitable HttpBodySerializer found for reading Content-Type: 'null'",
         result.exception.message
       )
     }
@@ -931,7 +928,7 @@ class HttpResponseBodies {
     }
 
     assertThrows<IllegalStateException>(
-      message = "No suitable HttpContentSerializer found for reading Content-Type: 'image/gif'"
+      message = "No suitable HttpBodySerializer found for reading Content-Type: 'image/gif'"
     ) {
       service.getString()
     }
@@ -940,30 +937,30 @@ class HttpResponseBodies {
       assertIs<HttpResult.Failure>(result)
       assertIs<IllegalStateException>(result.exception)
       assertEquals(
-        "No suitable HttpContentSerializer found for reading Content-Type: 'image/gif'",
+        "No suitable HttpBodySerializer found for reading Content-Type: 'image/gif'",
         result.exception.message
       )
     }
   }
 
   @Test fun `Response body serialization error`() = runHttpTest {
-    val throwingSerializer = object : HttpContentSerializer {
+    val throwingSerializer = object : HttpBodySerializer {
       override fun canWrite(contentType: ContentType) = true
       override fun canRead(contentType: ContentType?) = true
 
       override fun <T> write(
         serializationStrategy: SerializationStrategy<T>,
-        content: T,
+        body: T,
         contentType: ContentType
       ): OutgoingContent = throw SerializationException("oops")
 
       override suspend fun <T> read(
         deserializationStrategy: DeserializationStrategy<T>,
-        content: ByteReadChannel,
+        body: ByteReadChannel,
         contentType: ContentType?
       ): T = throw SerializationException("oops")
     }
-    val service = HttpResponseBodiesTestService(BASE_URL, httpClient, listOf(throwingSerializer))
+    val service = ResponseBodiesTestService(BASE_URL, httpClient, listOf(throwingSerializer))
 
     assertThrows<SerializationException>(message = "oops") { service.getString() }
 

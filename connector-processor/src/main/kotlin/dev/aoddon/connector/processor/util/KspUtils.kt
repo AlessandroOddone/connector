@@ -42,16 +42,26 @@ internal fun KSType.className(): ClassName? {
 internal fun KSType.typeName(
   onTypeArgumentResolvedListener: OnTypeArgumentResolvedListener? = null
 ): TypeName? {
+  return typeNameRecursive(
+    path = listOf(this),
+    onTypeArgumentResolvedListener = onTypeArgumentResolvedListener
+  )
+}
+
+internal fun KSType.typeNameRecursive(
+  path: List<KSType>,
+  onTypeArgumentResolvedListener: OnTypeArgumentResolvedListener? = null
+): TypeName? {
   return if (arguments.isEmpty()) {
     className()
   } else {
     className()
       ?.parameterizedBy(
         typeArguments = arguments
-          .map { typeArgument ->
+          .mapIndexed { index, typeArgument ->
             val resolvedType = typeArgument.type?.resolve()
-            val resolvedTypeName = resolvedType?.typeName(onTypeArgumentResolvedListener)
-            return@map when (typeArgument.variance) {
+            val resolvedTypeName = resolvedType?.typeNameRecursive(path + resolvedType, onTypeArgumentResolvedListener)
+            return@mapIndexed when (typeArgument.variance) {
               Variance.STAR -> STAR
               Variance.COVARIANT -> resolvedTypeName?.let { WildcardTypeName.producerOf(it) }
               Variance.CONTRAVARIANT -> resolvedTypeName?.let { WildcardTypeName.consumerOf(it) }
@@ -61,13 +71,14 @@ internal fun KSType.typeName(
                 argument = typeArgument,
                 argumentTypeName = typeName,
                 argumentTypeDeclaration = resolvedType?.declaration,
-                argumentOwner = this
+                argumentIndex = index,
+                pathToArgument = path,
               )
             }
           }
           // Return null from 'typeName' if we could not resolve one.
           // Not doing this in the previous 'map' to make sure that we notify the listener for all arguments.
-          .map { typeName: TypeName? -> typeName ?: return@typeName null }
+          .map { typeName: TypeName? -> typeName ?: return@typeNameRecursive null }
       )
       ?.run {
         val nullable = nullability == Nullability.NULLABLE
@@ -81,6 +92,7 @@ internal interface OnTypeArgumentResolvedListener {
     argument: KSTypeArgument,
     argumentTypeName: TypeName?,
     argumentTypeDeclaration: KSDeclaration?,
-    argumentOwner: KSType,
+    argumentIndex: Int,
+    pathToArgument: List<KSType>,
   )
 }
