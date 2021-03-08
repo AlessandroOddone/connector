@@ -26,8 +26,9 @@ subprojects {
   }
 
   tasks.withType<KotlinCompile> {
-    kotlinOptions.jvmTarget = "1.8"
     kotlinOptions {
+      jvmTarget = "1.8"
+      useIR = true
       freeCompilerArgs = freeCompilerArgs + listOf(
         "-Xopt-in=kotlin.RequiresOptIn",
         "-Xopt-in=kotlin.contracts.ExperimentalContracts",

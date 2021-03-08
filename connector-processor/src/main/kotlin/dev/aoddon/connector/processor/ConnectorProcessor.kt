@@ -5,6 +5,7 @@ import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
+import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import dev.aoddon.connector.codegen.toFileSpec
 import io.ktor.utils.io.core.use
@@ -25,12 +26,12 @@ public class ConnectorProcessor : SymbolProcessor {
     this.serviceParser = ServiceParser(logger)
   }
 
-  override fun process(resolver: Resolver) {
+  override fun process(resolver: Resolver): List<KSAnnotated> {
     resolver
       .getSymbolsWithAnnotation(SERVICE_ANNOTATION_QUALIFIED_NAME)
       .forEach { annotated ->
         val containingFile = (annotated as? KSClassDeclaration)?.containingFile ?: return@forEach
-        val service = serviceParser.parse(annotated)
+        val service = serviceParser.parse(annotated) ?: return@forEach
         OutputStreamWriter(
           codeGenerator.createNewFile(
             dependencies = Dependencies(
@@ -44,9 +45,8 @@ public class ConnectorProcessor : SymbolProcessor {
           UTF_8
         ).use(service.toFileSpec()::writeTo)
       }
-  }
 
-  override fun finish() {
+    return emptyList()
   }
 }
 

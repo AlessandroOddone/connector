@@ -1,5 +1,6 @@
 package dev.aoddon.connector.processor
 
+import com.google.devtools.ksp.isConstructor
 import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
@@ -34,8 +35,10 @@ import io.ktor.http.IllegalHeaderValueException
 import io.ktor.http.content.PartData
 import java.lang.StringBuilder
 
-public class ServiceParser(private val logger: KSPLogger) {
-  public fun parse(classDeclaration: KSClassDeclaration): ServiceDescription = with(classDeclaration) {
+internal class ServiceParser(logger: KSPLogger) {
+  private val logger = Logger(logger)
+
+  internal fun parse(classDeclaration: KSClassDeclaration): ServiceDescription? = with(classDeclaration) {
     if (!isInterface || !isTopLevel) {
       logger.error("@Service target must be a top-level interface.", classDeclaration)
     }
@@ -54,10 +57,12 @@ public class ServiceParser(private val logger: KSPLogger) {
         if (declaration is KSPropertyDeclaration) {
           logger.error("Properties are not allowed in @Service interfaces.", declaration)
         }
-        (declaration as? KSFunctionDeclaration)?.parseServiceFunction()
+        (declaration as? KSFunctionDeclaration)
+          ?.takeIf { !it.isConstructor() }
+          ?.parseServiceFunction()
       }
 
-    return ServiceDescription(
+    if (logger.hasErrors) null else ServiceDescription(
       name = serviceName,
       functions = serviceFunctions,
       parentInterface = className()!!
@@ -610,7 +615,7 @@ public class ServiceParser(private val logger: KSPLogger) {
       )
 
       parts.isNotEmpty() -> ServiceDescription.HttpContent.Multipart(
-        subtype = multipartAnnotations.first().subtype,
+        subtype = multipartAnnotations.firstOrNull()?.subtype ?: "form-data",
         parts = parts
       )
 
@@ -1303,6 +1308,15 @@ public class ServiceParser(private val logger: KSPLogger) {
     }
     // Avoid a potentially confusing error message if the return type is '*' (which is already a compilation error).
     return this != STAR
+  }
+
+  private class Logger(private val delegate: KSPLogger) {
+    var hasErrors: Boolean = false
+
+    fun error(message: String, symbol: KSNode) {
+      delegate.error(message, symbol)
+      hasErrors = true
+    }
   }
 }
 
