@@ -11,13 +11,7 @@ internal fun MockRequestHandleScope.respondJson(
   content: String,
   status: HttpStatusCode = HttpStatusCode.OK,
 ): HttpResponseData {
-  return respond(
-    content = content,
-    status = status,
-    headers = buildHeaders {
-      append(HttpHeaders.ContentType, "application/json")
-    }
-  )
+  return respondJson(content = content.toByteArray(), status = status)
 }
 
 internal fun MockRequestHandleScope.respondJson(
@@ -28,7 +22,20 @@ internal fun MockRequestHandleScope.respondJson(
     content = content,
     status = status,
     headers = buildHeaders {
+      append(HttpHeaders.ContentLength, content.size.toString())
       append(HttpHeaders.ContentType, "application/json")
+    }
+  )
+}
+
+internal fun MockRequestHandleScope.respondEmpty(
+  status: HttpStatusCode = HttpStatusCode.NoContent
+): HttpResponseData {
+  return respond(
+    content = ByteArray(0),
+    status = status,
+    headers = buildHeaders {
+      append(HttpHeaders.ContentLength, "0")
     }
   )
 }

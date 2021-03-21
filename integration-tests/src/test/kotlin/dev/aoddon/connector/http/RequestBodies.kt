@@ -68,6 +68,7 @@ private const val JSON = "application/json"
   @POST("postNullableMap") suspend fun postNullableMap(@Body(JSON) body: Map<String, Node>?)
 
   @POST("postGif") suspend fun postGif(@Body("image/gif") body: String)
+  @POST("postGif") suspend fun postGifResult(@Body("image/gif") body: String): HttpResult<*>
   @POST("postContentTypeWithCharset") suspend fun postContentTypeWithCharset(
     @Body("$JSON; charset=UTF-8") body: String
   )
@@ -471,11 +472,16 @@ class RequestBodiesTest {
 
   @Test fun `No serializer for @Body Content-Type error`() = runHttpTest {
     val service = RequestBodiesTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
-    assertThrows<IllegalStateException>(
-      message = "No suitable HttpBodySerializer found for writing Content-Type: 'image/gif'"
-    ) {
+    val expectedErrorMessage = "No suitable HttpBodySerializer found for writing Content-Type: 'image/gif'"
+
+    assertThrows<IllegalStateException>(message = expectedErrorMessage) {
       service.postGif("gif")
     }
+
+    val result = service.postGifResult("gif")
+    assertIs<HttpResult.Failure>(result)
+    assertIs<IllegalStateException>(result.exception)
+    assertEquals(expectedErrorMessage, result.exception.message)
   }
 
   @Test fun `@Body Content-Type with Charset parameter`() = runHttpTest {

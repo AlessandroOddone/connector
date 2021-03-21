@@ -1,7 +1,6 @@
 package dev.aoddon.connector.codegen
 
 import com.squareup.kotlinpoet.ClassName
-import com.squareup.kotlinpoet.ParameterizedTypeName
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.asClassName
 import io.ktor.http.HttpHeaders
@@ -31,6 +30,7 @@ public data class ServiceDescription(
       public val url: Url,
       public val headers: List<HeaderContent>,
       public val content: HttpContent?,
+      public val streamingLambdaParameterName: String?,
       public val returnType: TypeName
     ) : Function() {
       public sealed class HeaderContent {
@@ -77,6 +77,10 @@ public data class ServiceDescription(
         public data class Parameter(val parameterName: String, val fieldName: String) : FieldContent()
         public data class Map(val parameterName: String) : FieldContent()
       }
+
+      init {
+        validate()
+      }
     }
 
     public data class Multipart(val subtype: String, val parts: List<PartContent>) : HttpContent() {
@@ -115,12 +119,6 @@ private fun ServiceDescription.Function.Http.validate() {
     }
   ) {
     "'headers' must not contain ${HttpHeaders.ContentType} or ${HttpHeaders.ContentLength}. Found: $headers"
-  }
-  check(parameters.values.all { it is ClassName || it is ParameterizedTypeName }) {
-    "'parameters' must be either 'ClassName's or 'ParameterizedTypeName's. Found: $parameters"
-  }
-  check(returnType is ClassName || returnType is ParameterizedTypeName) {
-    "'returnType' must be either a 'ClassName' or a 'ParameterizedTypeName'. Found: $returnType"
   }
 }
 

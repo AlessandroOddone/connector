@@ -4,7 +4,6 @@ import dev.aoddon.connector.test.util.runTest
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandler
-import io.ktor.client.engine.mock.respond
 import io.ktor.client.features.logging.LogLevel
 import io.ktor.client.features.logging.Logger
 import io.ktor.client.features.logging.Logging
@@ -14,7 +13,6 @@ import io.ktor.http.Headers
 import io.ktor.http.HttpMethod
 import io.ktor.http.Url
 import io.ktor.http.content.OutgoingContent
-import io.ktor.utils.io.ByteReadChannel
 
 fun runHttpTest(block: suspend HttpTestContext.() -> Unit) = runTest {
   block(
@@ -38,7 +36,7 @@ fun runHttpTest(block: suspend HttpTestContext.() -> Unit) = runTest {
         }
         install(Logging) {
           logger = Logger.SIMPLE
-          level = LogLevel.HEADERS
+          level = LogLevel.BODY
         }
       }
 
@@ -79,4 +77,4 @@ fun HttpLogEntry.MatcherBuilder.hasRequestBody(text: String, contentType: Conten
   return hasRequestBody(text.encodeToByteArray(), contentType)
 }
 
-private val defaultMockHttpRequestHandler: MockRequestHandler = { respond(ByteReadChannel.Empty) }
+private val defaultMockHttpRequestHandler: MockRequestHandler = { respondEmpty() }

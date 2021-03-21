@@ -1,13 +1,19 @@
 package dev.aoddon.connector.processor.util
 
 import com.google.devtools.ksp.symbol.ClassKind
+import com.google.devtools.ksp.symbol.KSCallableReference
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSTypeArgument
+import com.google.devtools.ksp.symbol.KSTypeReference
+import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.symbol.Nullability
 import com.google.devtools.ksp.symbol.Variance
 import com.squareup.kotlinpoet.ClassName
+import com.squareup.kotlinpoet.KModifier
+import com.squareup.kotlinpoet.LambdaTypeName
+import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.STAR
 import com.squareup.kotlinpoet.TypeName
@@ -39,60 +45,89 @@ internal fun KSType.className(): ClassName? {
   }
 }
 
-internal fun KSType.typeName(
-  onTypeArgumentResolvedListener: OnTypeArgumentResolvedListener? = null
-): TypeName? {
-  return typeNameRecursive(
-    path = listOf(this),
-    onTypeArgumentResolvedListener = onTypeArgumentResolvedListener
-  )
-}
+internal fun KSTypeReference.resolveTypeInfo(): TypeInfo? = collectTypeInfo(ksTypeArgument = null)
 
-internal fun KSType.typeNameRecursive(
-  path: List<KSType>,
-  onTypeArgumentResolvedListener: OnTypeArgumentResolvedListener? = null
-): TypeName? {
-  return if (arguments.isEmpty()) {
-    className()
-  } else {
-    className()
-      ?.parameterizedBy(
-        typeArguments = arguments
-          .mapIndexed { index, typeArgument ->
-            val resolvedType = typeArgument.type?.resolve()
-            val resolvedTypeName = resolvedType?.typeNameRecursive(path + resolvedType, onTypeArgumentResolvedListener)
-            return@mapIndexed when (typeArgument.variance) {
-              Variance.STAR -> STAR
-              Variance.COVARIANT -> resolvedTypeName?.let { WildcardTypeName.producerOf(it) }
-              Variance.CONTRAVARIANT -> resolvedTypeName?.let { WildcardTypeName.consumerOf(it) }
-              Variance.INVARIANT -> resolvedTypeName
-            }.also { typeName: TypeName? ->
-              onTypeArgumentResolvedListener?.onTypeArgumentResolved(
-                argument = typeArgument,
-                argumentTypeName = typeName,
-                argumentTypeDeclaration = resolvedType?.declaration,
-                argumentIndex = index,
-                pathToArgument = path,
-              )
-            }
+private fun KSTypeReference.collectTypeInfo(
+  ksTypeArgument: KSTypeArgument?,
+): TypeInfo? {
+  return when (element) {
+    is KSCallableReference -> {
+      val callableReference = element as KSCallableReference
+      val receiver = callableReference.receiverType?.run { collectTypeInfo(ksTypeArgument)?.typeName ?: return null }
+      val parameters = callableReference.functionParameters.map { ksValueParameter ->
+        ParameterSpec(
+          name = ksValueParameter.name?.asString() ?: "",
+          type = ksValueParameter.type.collectTypeInfo(ksTypeArgument)?.typeName ?: return null,
+          modifiers = mutableListOf<KModifier>().apply {
+            if (ksValueParameter.isCrossInline) add(KModifier.CROSSINLINE)
+            if (ksValueParameter.isNoInline) add(KModifier.NOINLINE)
+            if (ksValueParameter.isVararg) add(KModifier.VARARG)
           }
-          // Return null from 'typeName' if we could not resolve one.
-          // Not doing this in the previous 'map' to make sure that we notify the listener for all arguments.
-          .map { typeName: TypeName? -> typeName ?: return@typeNameRecursive null }
-      )
-      ?.run {
-        val nullable = nullability == Nullability.NULLABLE
-        if (isNullable != nullable) copy(nullable = nullable) else this
+        )
       }
+      val returnType = callableReference.returnType.collectTypeInfo(ksTypeArgument)?.typeName ?: return null
+
+      val ksType = resolve()
+      val typeName = LambdaTypeName.get(receiver, parameters, returnType)
+        .copy(
+          nullable = ksType.nullability == Nullability.NULLABLE,
+          suspending = modifiers.contains(Modifier.SUSPEND) ||
+            // Check resolved type name since we can't retrieve the SUSPEND modifier when the lambda is nullable
+            // (https://github.com/google/ksp/issues/354)
+            ksType.declaration.qualifiedName?.asString()
+            ?.split("kotlin.coroutines.SuspendFunction")
+            ?.let { splits -> splits.size == 2 && splits.last().toIntOrNull() != null } == true
+        )
+
+      return TypeInfo(
+        ksType = ksType,
+        typeName = typeName,
+        arguments = emptyList(),
+        ksTypeArgument = ksTypeArgument
+      )
+    }
+
+    else -> {
+      val ksType = resolve()
+      val argumentTypeNames: List<TypeInfo> = ksType.arguments.map { argument ->
+        if (argument.variance == Variance.STAR) {
+          return@map TypeInfo(
+            ksType = null,
+            typeName = STAR,
+            arguments = emptyList(),
+            ksTypeArgument = argument
+          )
+        }
+        val ksTypeReference = argument.type ?: return null
+        ksTypeReference.collectTypeInfo(argument) ?: return null
+      }
+      val rawTypeName = ksType.className()?.let { className ->
+        if (argumentTypeNames.isEmpty()) return@let className
+        className
+          .parameterizedBy(argumentTypeNames.map { it.typeName ?: return@let null })
+          .run {
+            val nullable = ksType.nullability == Nullability.NULLABLE
+            if (isNullable != nullable) copy(nullable = nullable) else this
+          }
+      }
+      val typeName = when (ksTypeArgument?.variance) {
+        Variance.COVARIANT -> rawTypeName?.let { WildcardTypeName.producerOf(it) }
+        Variance.CONTRAVARIANT -> rawTypeName?.let { WildcardTypeName.consumerOf(it) }
+        Variance.STAR, Variance.INVARIANT, null -> rawTypeName
+      }
+      TypeInfo(
+        ksType = ksType,
+        typeName = typeName,
+        arguments = argumentTypeNames,
+        ksTypeArgument = ksTypeArgument
+      )
+    }
   }
 }
 
-internal interface OnTypeArgumentResolvedListener {
-  fun onTypeArgumentResolved(
-    argument: KSTypeArgument,
-    argumentTypeName: TypeName?,
-    argumentTypeDeclaration: KSDeclaration?,
-    argumentIndex: Int,
-    pathToArgument: List<KSType>,
-  )
-}
+internal data class TypeInfo(
+  val ksType: KSType?,
+  val typeName: TypeName?,
+  val arguments: List<TypeInfo>,
+  val ksTypeArgument: KSTypeArgument?
+)
