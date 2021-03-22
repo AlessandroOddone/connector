@@ -7,6 +7,7 @@ import dev.aoddon.connector.test.util.assertThrows
 import dev.aoddon.connector.util.JsonBodySerializer
 import dev.aoddon.connector.util.Node
 import dev.aoddon.connector.util.Wrapper
+import dev.aoddon.connector.util.respondEmpty
 import dev.aoddon.connector.util.respondJson
 import dev.aoddon.connector.util.runHttpTest
 import io.ktor.client.engine.mock.respond
@@ -676,7 +677,7 @@ class ResponseBodiesTest {
       assertEquals(HttpBody(true), body)
     }
 
-    httpRequestHandler { respond(content = ByteReadChannel.Empty) }
+    httpRequestHandler { respondEmpty() }
 
     with(service.getNullableHttpBodyHttpResult()) {
       assertIs<HttpResponse.Success<*>>(this)
@@ -792,7 +793,7 @@ class ResponseBodiesTest {
       assertEquals(HttpBody(true), body)
     }
 
-    httpRequestHandler { respond(content = ByteReadChannel.Empty) }
+    httpRequestHandler { respondEmpty() }
 
     with(service.getNullableHttpBodyHttpResponse()) {
       assertIs<HttpResponse.Success<*>>(this)
@@ -889,7 +890,7 @@ class ResponseBodiesTest {
     assertEquals(HttpBody(true), service.getHttpBodyHttpResponseSuccess().body)
     assertEquals(HttpBody(true), service.getNullableHttpBodyHttpResponseSuccess().body)
 
-    httpRequestHandler { respond(content = ByteReadChannel.Empty) }
+    httpRequestHandler { respondEmpty() }
 
     assertNull(service.getNullableHttpBodyHttpResponseSuccess().body)
   }

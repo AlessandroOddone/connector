@@ -61,6 +61,9 @@ public annotation class HeaderMap
 @Target(AnnotationTarget.VALUE_PARAMETER)
 public annotation class Body(val contentType: String)
 
+@Target(AnnotationTarget.VALUE_PARAMETER)
+public annotation class Streaming
+
 /*
  * URL Encoded Forms
  */

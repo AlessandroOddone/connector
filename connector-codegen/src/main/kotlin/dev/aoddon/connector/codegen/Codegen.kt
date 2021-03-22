@@ -9,6 +9,7 @@ import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.LIST
+import com.squareup.kotlinpoet.LambdaTypeName
 import com.squareup.kotlinpoet.MemberName
 import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.ParameterizedTypeName
@@ -19,6 +20,7 @@ import com.squareup.kotlinpoet.STAR
 import com.squareup.kotlinpoet.STRING
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
+import com.squareup.kotlinpoet.TypeVariableName
 import com.squareup.kotlinpoet.UNIT
 import com.squareup.kotlinpoet.asClassName
 import com.squareup.kotlinpoet.buildCodeBlock
@@ -35,8 +37,9 @@ import dev.aoddon.connector.http.HttpRequest
 import dev.aoddon.connector.http.HttpResponse
 import dev.aoddon.connector.http.HttpResult
 import io.ktor.client.HttpClient
+import io.ktor.client.call.HttpClientCall
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.forms.FormDataContent
-import io.ktor.client.statement.HttpStatement
 import io.ktor.client.utils.EmptyContent
 import io.ktor.http.ContentType
 import io.ktor.http.HeaderValueParam
@@ -47,6 +50,8 @@ import io.ktor.http.URLProtocol
 import io.ktor.http.Url
 import io.ktor.util.StringValues
 import io.ktor.utils.io.ByteReadChannel
+import kotlinx.coroutines.CompletableJob
+import kotlinx.coroutines.Job
 
 public fun ServiceDescription.toFileSpec(): FileSpec = ServiceCodeGenerator(this).run()
 
@@ -62,9 +67,8 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       )
       .addFunction(factoryFunctionSpec)
       .addType(implementationClassSpec)
-      .addFunction(httpRequestHandlerFunctionSpec)
-      .addFunction(executeRequestWithInterceptorsFunctionSpec)
-      .addFunction(toHttpStatementFunctionSpec)
+      .addFunction(executeRequestFunctionSpec)
+      .addFunction(toHttpRequestBuilderFunctionSpec)
       .addFunction(firstWriterOfFunctionSpec)
       .addFunction(firstReaderOfFunctionSpec)
       .addFunction(ensureValidBaseUrlFunctionSpec)
@@ -81,7 +85,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       .build()
 
     val httpClientParameter = ParameterSpec
-      .builder(ParameterNames.HTTP_CLIENT, ClassNames.HTTP_CLIENT)
+      .builder(ParameterNames.HTTP_CLIENT, ClassNames.Ktor.HTTP_CLIENT)
       .build()
 
     val httpBodySerializersParameter = ParameterSpec
@@ -139,7 +143,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       .primaryConstructor(
         FunSpec.constructorBuilder()
           .addParameter(ParameterNames.BASE_URL, ClassNames.Ktor.URL)
-          .addParameter(ParameterNames.HTTP_CLIENT, ClassNames.HTTP_CLIENT)
+          .addParameter(ParameterNames.HTTP_CLIENT, ClassNames.Ktor.HTTP_CLIENT)
           .addParameter(
             ParameterNames.HTTP_BODY_SERIALIZERS,
             LIST.plusParameter(ClassNames.HTTP_BODY_SERIALIZER)
@@ -158,7 +162,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       )
       .addProperty(
         PropertySpec
-          .builder(ParameterNames.HTTP_CLIENT, ClassNames.HTTP_CLIENT, KModifier.PRIVATE)
+          .builder(ParameterNames.HTTP_CLIENT, ClassNames.Ktor.HTTP_CLIENT, KModifier.PRIVATE)
           .initializer(ParameterNames.HTTP_CLIENT)
           .build()
       )
@@ -925,17 +929,49 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       add(")\n")
     }
 
-    fun returnFromFunction(resultVariableName: String) = buildCodeBlock returnFromFunctionBlock@{
+    fun rawResultMapper(resultVariableName: String) = buildCodeBlock rawResultMapperBlock@{
+      if (streamingLambdaParameterName != null) {
+        val streamingLambdaType = parameters.getValue(streamingLambdaParameterName) as LambdaTypeName
+        when (streamingLambdaType.parameters.single().type.classNameOrNull()) {
+          ClassNames.HTTP_RESULT -> {
+            addStatement("$streamingLambdaParameterName($resultVariableName)")
+          }
+          ClassNames.HTTP_RESPONSE -> {
+            addStatement(
+              "$streamingLambdaParameterName($resultVariableName.%M())",
+              MemberName("dev.aoddon.connector.http", "responseOrThrow")
+            )
+          }
+          ClassNames.HTTP_RESPONSE_SUCCESS -> {
+            addStatement(
+              "$streamingLambdaParameterName($resultVariableName.%M())",
+              MemberName("dev.aoddon.connector.http", "successOrThrow")
+            )
+          }
+          ClassNames.Ktor.BYTE_READ_CHANNEL -> {
+            addStatement(
+              "$streamingLambdaParameterName($resultVariableName.%M())",
+              MemberName("dev.aoddon.connector.http", "successBodyOrThrow")
+            )
+          }
+          else -> error("Unexpected streaming lambda parameter type: $streamingLambdaType")
+        }
+        return@rawResultMapperBlock
+      }
+
       val returnsUnit = returnType.classNameOrNull() == UNIT
 
       if (returnsUnit) {
-        add("$resultVariableName.%M()", MemberName("dev.aoddon.connector.http", "successOrThrow"))
-        return@returnFromFunctionBlock
+        addStatement(
+          "$resultVariableName.%M()",
+          MemberName("dev.aoddon.connector.http", "successOrThrow")
+        )
+        return@rawResultMapperBlock
       }
 
       val returnTypeClassName = returnType.classNameOrNull()?.nonNull()
       var isNestedHttpBody = false
-      var isNestedHttpBodyNullable = false
+      var isNullableNestedHttpBody = false
       var deserializedResponseBodyTypeName = returnType
       while (
         deserializedResponseBodyTypeName.classNameOrNull().let { className ->
@@ -956,41 +992,38 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           deserializedResponseBodyTypeName.classNameOrNull()?.canonicalName == ClassNames.HTTP_BODY.canonicalName
         ) {
           isNestedHttpBody = true
-          isNestedHttpBodyNullable = deserializedResponseBodyTypeName.isNullable
+          isNullableNestedHttpBody = deserializedResponseBodyTypeName.isNullable
         }
       }
 
-      fun responseBody(
-        successVariableName: String,
-        isReturnNeeded: Boolean = false
-      ) = buildCodeBlock responseBodyBlock@{
-        @Suppress("NAME_SHADOWING") var isReturnNeeded = isReturnNeeded
-
+      fun responseBody(successVariableName: String) = buildCodeBlock responseBodyBlock@{
         if (
           deserializedResponseBodyTypeName == STAR ||
           deserializedResponseBodyTypeName.classNameOrNull() == UNIT
         ) {
           addStatement(
-            "%L$successVariableName.%M(%T)",
-            if (isReturnNeeded) "return·" else "",
+            "$successVariableName.%M(%T)",
             MemberName("dev.aoddon.connector.http", "toSuccess"),
             UNIT
           )
           return@responseBodyBlock
         }
 
-        if (returnType.isNullable && returnTypeClassName == ClassNames.HTTP_BODY) {
-          beginControlFlow("if ($successVariableName.body.availableForRead·==·0)")
-          addStatement("%Lnull", if (isReturnNeeded) "return·" else "")
-          endControlFlow()
+        val isNullableHttpBody = returnType.isNullable && returnTypeClassName == ClassNames.HTTP_BODY
+        if (isNullableHttpBody) {
+          beginControlFlow(
+            "if ($successVariableName.status.value == 204 || $successVariableName.%M()·==·0L)",
+            MemberName("io.ktor.http", "contentLength")
+          )
+          addStatement("null")
+          nextControlFlow("else")
         }
 
-        if (isNestedHttpBodyNullable) {
+        if (isNullableNestedHttpBody) {
           beginControlFlow(
-            "%Lif ($successVariableName.body.availableForRead·==·0)",
-            if (isReturnNeeded) "return·" else ""
+            "if ($successVariableName.status.value == 204 || $successVariableName.%M()·==·0L)",
+            MemberName("io.ktor.http", "contentLength")
           )
-          isReturnNeeded = false
           addStatement(
             "$successVariableName.%M(null)",
             MemberName("dev.aoddon.connector.http", "toSuccess")
@@ -998,7 +1031,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           nextControlFlow("else")
         }
 
-        val contentTypeVariableName = variableName("responseContentType")
+        val contentTypeVariableName = variableName("contentType")
         addStatement(
           "val·$contentTypeVariableName·= $successVariableName.%M()",
           MemberName("io.ktor.http", "contentType")
@@ -1008,14 +1041,14 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           beginControlFlow("try")
         }
 
-        val deserializedBodyVariableName = variableName("deserializedResponseBody")
+        val deserializedBodyVariableName = variableName("deserializedBody")
         add(
           "%L%L.%M(%L).read(\n",
           when (returnTypeClassName) {
             ClassNames.HTTP_RESULT, ClassNames.HTTP_RESPONSE, ClassNames.HTTP_RESPONSE_SUCCESS, ClassNames.HTTP_BODY -> {
               "val·$deserializedBodyVariableName·=·"
             }
-            else -> if (isReturnNeeded) "return·" else ""
+            else -> ""
           },
           classProperty(ParameterNames.HTTP_BODY_SERIALIZERS, isNestedThis = true),
           MemberName(packageName, FunctionNames.FIRST_READER_OF),
@@ -1030,8 +1063,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         when (returnTypeClassName) {
           ClassNames.HTTP_RESULT, ClassNames.HTTP_RESPONSE, ClassNames.HTTP_RESPONSE_SUCCESS -> {
             addStatement(
-              "%L$successVariableName.%M(%L)",
-              if (isReturnNeeded) "return·" else "",
+              "$successVariableName.%M(%L)",
               MemberName("dev.aoddon.connector.http", "toSuccess"),
               if (isNestedHttpBody) {
                 buildCodeBlock {
@@ -1044,8 +1076,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           }
           ClassNames.HTTP_BODY -> {
             addStatement(
-              "%L%T($deserializedBodyVariableName)",
-              if (isReturnNeeded) "return·" else "",
+              "%T($deserializedBodyVariableName)",
               ClassNames.HTTP_BODY
             )
           }
@@ -1056,21 +1087,20 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         if (returnTypeClassName == ClassNames.HTTP_RESULT) {
           nextControlFlow("catch (throwable: %T)", ClassNames.THROWABLE)
           addStatement(
-            "%L$resultVariableName.%M(throwable)",
-            if (isReturnNeeded) "return·" else "",
+            "$resultVariableName.%M(throwable)",
             MemberName("dev.aoddon.connector.http", "toFailure")
           )
           endControlFlow()
         }
 
-        if (isNestedHttpBodyNullable) {
+        if (isNullableHttpBody || isNullableNestedHttpBody) {
           endControlFlow()
         }
       }
 
       when (returnTypeClassName) {
         ClassNames.HTTP_RESULT -> {
-          beginControlFlow("return·when($resultVariableName)")
+          beginControlFlow("when ($resultVariableName)")
 
           beginControlFlow("is·%T·->", ClassNames.HTTP_RESPONSE_SUCCESS)
           add(responseBody(successVariableName = resultVariableName))
@@ -1088,7 +1118,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
             "val·$responseVariableName·= $resultVariableName.%M()",
             MemberName("dev.aoddon.connector.http", "responseOrThrow")
           )
-          beginControlFlow("return·when($responseVariableName)")
+          beginControlFlow("when ($responseVariableName)")
 
           beginControlFlow("is·%T·->", ClassNames.HTTP_RESPONSE_SUCCESS)
           add(responseBody(successVariableName = responseVariableName))
@@ -1105,7 +1135,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
             "val·$successVariableName·= $resultVariableName.%M()",
             MemberName("dev.aoddon.connector.http", "successOrThrow")
           )
-          add(responseBody(successVariableName = successVariableName, isReturnNeeded = true))
+          add(responseBody(successVariableName = successVariableName))
         }
       }
     }
@@ -1197,140 +1227,144 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         )
       )
 
-      add(
-        "val·$resultVariableName·= $requestVariableName.%M(%L·+·%M(%L))\n",
-        MemberName(packageName, FunctionNames.EXECUTE_WITH),
+      beginControlFlow(
+        "return $requestVariableName.%M(%L, %L) { $resultVariableName ->",
+        MemberName(packageName, FunctionNames.EXECUTE),
+        classProperty(ParameterNames.HTTP_CLIENT),
         classProperty(ParameterNames.HTTP_INTERCEPTORS),
-        MemberName(packageName, FunctionNames.HTTP_REQUEST_HANDLER),
-        classProperty(ParameterNames.HTTP_CLIENT)
       )
 
-      add(returnFromFunction(resultVariableName = resultVariableName))
+      add(rawResultMapper(resultVariableName = resultVariableName))
+
+      endControlFlow()
     }
   }
 
-  private val httpRequestHandlerFunctionSpec: FunSpec = run {
+  private val executeRequestFunctionSpec: FunSpec = run {
     val clientParameterName = "client"
-
-    FunSpec.builder(FunctionNames.HTTP_REQUEST_HANDLER)
-      .addModifiers(KModifier.PRIVATE, KModifier.SUSPEND, KModifier.INLINE)
-      .addParameter(clientParameterName, ClassNames.HTTP_CLIENT)
-      .returns(ClassNames.HTTP_INTERCEPTOR)
-      .addCode(
-        """
-        return object : %T {
-          public override suspend fun %T.intercept(): %T {
-            return request.%M($clientParameterName).execute { response ->
-              with(response) {
-                when (status.value) {
-                  in (200..299) -> request.%M(
-                    status = status,
-                    headers = headers,
-                    body = content,
-                    protocol = version,
-                    timestamp = responseTime.timestamp,
-                    requestTimestamp = requestTime.timestamp
-                  )
-                  else -> request.%M(
-                    status = status,
-                    headers = headers,
-                    body = content.%M().%M(),
-                    protocol = version,
-                    timestamp = responseTime.timestamp,
-                    requestTimestamp = requestTime.timestamp
-                  )
-                }
-              }
-            }
-          }
-        }
-        """.trimIndent(),
-        ClassNames.HTTP_INTERCEPTOR,
-        ClassNames.HTTP_INTERCEPTOR_CONTEXT,
-        ClassNames.HTTP_RESULT.parameterizedBy(ClassNames.Ktor.BYTE_READ_CHANNEL),
-        MemberName(packageName, "toHttpStatement"),
-        MemberName("dev.aoddon.connector.http", "success"),
-        MemberName("dev.aoddon.connector.http", "responseError"),
-        MemberName("io.ktor.utils.io", "readRemaining"),
-        MemberName("io.ktor.utils.io.core", "readBytes"),
-      )
-      .build()
-  }
-
-  private val executeRequestWithInterceptorsFunctionSpec: FunSpec = run {
-    val requestParameterName = "request"
     val interceptorsParameterName = "interceptors"
-    val httpResultParameterized = ClassNames.HTTP_RESULT.parameterizedBy(ClassNames.Ktor.BYTE_READ_CHANNEL)
+    val blockParameterName = "block"
 
-    FunSpec.builder(FunctionNames.EXECUTE_WITH)
+    val httpResultParameterized = ClassNames.HTTP_RESULT.parameterizedBy(ClassNames.Ktor.BYTE_READ_CHANNEL)
+    val blockResultT = TypeVariableName("T")
+
+    FunSpec.builder(FunctionNames.EXECUTE)
       .addAnnotation(suppressNothingToInlineAnnotationSpec)
       .addModifiers(KModifier.PRIVATE, KModifier.INLINE, KModifier.SUSPEND)
+      .addTypeVariable(blockResultT)
       .receiver(ClassNames.HTTP_REQUEST)
+      .addParameter(
+        ParameterSpec(
+          clientParameterName,
+          ClassNames.Ktor.HTTP_CLIENT
+        )
+      )
       .addParameter(
         ParameterSpec(
           interceptorsParameterName,
           LIST.plusParameter(ClassNames.HTTP_INTERCEPTOR)
         )
       )
-      .returns(httpResultParameterized)
+      .addParameter(
+        ParameterSpec(
+          blockParameterName,
+          LambdaTypeName
+            .get(
+              parameters = listOf(ParameterSpec(name = "", type = httpResultParameterized)),
+              returnType = blockResultT
+            )
+            .copy(suspending = true),
+          modifiers = listOf(KModifier.CROSSINLINE)
+        )
+      )
+      .returns(blockResultT)
       .addCode(
         """
-        require($interceptorsParameterName.isNotEmpty()) { "The·list·of·interceptors·should·not·be·empty" }
         var index = -1
+        var dispose: (suspend () -> Unit)? = null
+      
         val context = object : %T {
-          override var request: %T = this@${FunctionNames.EXECUTE_WITH}
+          override var request: %T = this@execute
       
           override suspend fun proceedWith(request: %T): %T {
-            require(index++ < $interceptorsParameterName.lastIndex) { 
-              "The·last·interceptor·should·not·call·'proceedWith'" 
-            }
-            this.request = $requestParameterName
-            return·with($interceptorsParameterName[index]) {
-              try {
-                intercept()
-              } catch (throwable: %T) {
-                $requestParameterName.%M(throwable)
+            this.request = request
+            return try {
+              if (++index < $interceptorsParameterName.size) with($interceptorsParameterName[index]) { intercept() } else {
+                val builder = request.%M()
+                val call = $clientParameterName.requestPipeline.execute(builder, builder.body) as %T
+                with(call.response) {
+                  dispose = {
+                    val job = coroutineContext[%T] as %T
+                    job.complete()
+                    runCatching { content.cancel(null) }
+                    job.join()
+                  }
+                  when (status.value) {
+                    in (200..299) -> request.%M(
+                      status = status,
+                      headers = headers,
+                      body = content,
+                      protocol = version,
+                      timestamp = responseTime.timestamp,
+                      requestTimestamp = requestTime.timestamp
+                    )
+                    else -> request.%M(
+                      status = status,
+                      headers = headers,
+                      body = content.%M().%M(),
+                      protocol = version,
+                      timestamp = responseTime.timestamp,
+                      requestTimestamp = requestTime.timestamp
+                    )
+                  }
+                }
               }
+            } catch (throwable: %T) {
+              request.%M(throwable)
             }
           }
         }
-        return·context.proceedWith(this)
+        try {
+          return block(context.proceedWith(this))
+        } finally {
+          dispose?.invoke()
+        }
         """.trimIndent(),
         ClassNames.HTTP_INTERCEPTOR_CONTEXT,
         ClassNames.HTTP_REQUEST,
         ClassNames.HTTP_REQUEST,
         httpResultParameterized,
+        MemberName(packageName, FunctionNames.TO_HTTP_REQUEST_BUILDER),
+        ClassNames.Ktor.HTTP_CLIENT_CALL,
+        ClassNames.JOB,
+        ClassNames.COMPLETABLE_JOB,
+        MemberName("dev.aoddon.connector.http", "success"),
+        MemberName("dev.aoddon.connector.http", "responseError"),
+        MemberName("io.ktor.utils.io", "readRemaining"),
+        MemberName("io.ktor.utils.io.core", "readBytes"),
         ClassNames.THROWABLE,
         MemberName("dev.aoddon.connector.http", "failure")
       )
       .build()
   }
 
-  private val toHttpStatementFunctionSpec: FunSpec = run {
-    val clientParameterName = "client"
-
-    FunSpec.builder(FunctionNames.TO_HTTP_STATEMENT)
+  private val toHttpRequestBuilderFunctionSpec: FunSpec = run {
+    FunSpec.builder(FunctionNames.TO_HTTP_REQUEST_BUILDER)
       .addAnnotation(suppressNothingToInlineAnnotationSpec)
       .addModifiers(KModifier.PRIVATE, KModifier.INLINE, KModifier.SUSPEND)
       .receiver(ClassNames.HTTP_REQUEST)
-      .addParameter(
-        ParameterSpec(
-          clientParameterName,
-          ClassNames.HTTP_CLIENT
-        )
-      )
-      .returns(ClassNames.Ktor.HTTP_STATEMENT)
+      .returns(ClassNames.Ktor.HTTP_REQUEST_BUILDER)
       .addCode(
         """
-        return·$clientParameterName.%M {
-          method·=·this@${FunctionNames.TO_HTTP_STATEMENT}.method
-          url.%M(this@toHttpStatement.url)
-          headers.appendAll(this@${FunctionNames.TO_HTTP_STATEMENT}.headers)
+        return·%T().apply·{
+          method·=·this@${FunctionNames.TO_HTTP_REQUEST_BUILDER}.method
+          url.%M(this@${FunctionNames.TO_HTTP_REQUEST_BUILDER}.url)
+          headers.appendAll(this@${FunctionNames.TO_HTTP_REQUEST_BUILDER}.headers)
           body·=·bodySupplier()
           %M·=·false
         }
         """.trimIndent(),
-        MemberName("io.ktor.client.request", "request"),
+        ClassNames.Ktor.HTTP_REQUEST_BUILDER,
         MemberName("io.ktor.http", "takeFrom"),
         MemberName("io.ktor.client.features", "expectSuccess")
       )
@@ -1787,17 +1821,20 @@ private object ClassNames {
     val EMPTY_CONTENT = EmptyContent::class.asClassName()
     val FORM_DATA_CONTENT = FormDataContent::class.asClassName()
     val HEADER_VALUE_PARAM = HeaderValueParam::class.asClassName()
+    val HTTP_CLIENT = HttpClient::class.asClassName()
+    val HTTP_CLIENT_CALL = HttpClientCall::class.asClassName()
     val HTTP_METHOD = HttpMethod::class.asClassName()
-    val HTTP_STATEMENT = HttpStatement::class.asClassName()
+    val HTTP_REQUEST_BUILDER = HttpRequestBuilder::class.asClassName()
     val PARAMETERS_BUILDER = ParametersBuilder::class.asClassName()
     val STRING_VALUES = StringValues::class.asClassName()
     val URL = Url::class.asClassName()
     val URL_BUILDER = URLBuilder::class.asClassName()
   }
 
+  val COMPLETABLE_JOB = CompletableJob::class.asClassName()
+  val JOB = Job::class.asClassName()
   val HTTP_BODY = HttpBody::class.asClassName()
   val HTTP_BODY_SERIALIZER = HttpBodySerializer::class.asClassName()
-  val HTTP_CLIENT = HttpClient::class.asClassName()
   val HTTP_INTERCEPTOR = HttpInterceptor::class.asClassName()
   val HTTP_INTERCEPTOR_CONTEXT = HttpInterceptor.Context::class.asClassName()
   val HTTP_REQUEST = HttpRequest::class.asClassName()
@@ -1822,11 +1859,10 @@ private object FunctionNames {
   const val DYNAMIC_URL = "dynamicUrl"
   const val ENSURE_NO_PATH_TRAVERSAL = "ensureNoPathTraversal"
   const val ENSURE_VALID_BASE_URL = "ensureValidBaseUrl"
-  const val EXECUTE_WITH = "executeWith"
+  const val EXECUTE = "execute"
   const val FIRST_READER_OF = "firstReaderOf"
   const val FIRST_WRITER_OF = "firstWriterOf"
-  const val HTTP_REQUEST_HANDLER = "httpRequestHandler"
   const val IS_FULL_URL = "isFullUrl"
   const val IS_PATH_TRAVERSAL_SEGMENT = "isPathTraversalSegment"
-  const val TO_HTTP_STATEMENT = "toHttpStatement"
+  const val TO_HTTP_REQUEST_BUILDER = "toHttpRequestBuilder"
 }
