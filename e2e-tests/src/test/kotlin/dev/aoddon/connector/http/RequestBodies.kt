@@ -30,50 +30,81 @@ private const val JSON = "application/json"
 
 @Service interface RequestBodiesTestService {
   @POST("postBoolean") suspend fun postBoolean(@Body(JSON) body: Boolean)
+
   @POST("postByte") suspend fun postByte(@Body(JSON) body: Byte)
+
   @POST("postChar") suspend fun postChar(@Body(JSON) body: Char)
+
   @POST("postDouble") suspend fun postDouble(@Body(JSON) body: Double)
+
   @POST("postFloat") suspend fun postFloat(@Body(JSON) body: Float)
+
   @POST("postInt") suspend fun postInt(@Body(JSON) body: Int)
+
   @POST("postLong") suspend fun postLong(@Body(JSON) body: Long)
+
   @POST("postShort") suspend fun postShort(@Body(JSON) body: Short)
+
   @POST("postString") suspend fun postString(@Body(JSON) body: String)
+
   @POST("postString") suspend fun postStringResult(@Body(JSON) body: String): HttpResult<*>
 
   @POST("postBooleanArray") suspend fun postBooleanArray(@Body(JSON) body: BooleanArray)
+
   @POST("postByteArray") suspend fun postByteArray(@Body(JSON) body: ByteArray)
+
   @POST("postCharArray") suspend fun postCharArray(@Body(JSON) body: CharArray)
+
   @POST("postDoubleArray") suspend fun postDoubleArray(@Body(JSON) body: DoubleArray)
+
   @POST("postFloatArray") suspend fun postFloatArray(@Body(JSON) body: FloatArray)
+
   @POST("postIntArray") suspend fun postIntArray(@Body(JSON) body: IntArray)
+
   @POST("postLongArray") suspend fun postLongArray(@Body(JSON) body: LongArray)
+
   @POST("postShortArray") suspend fun postShortArray(@Body(JSON) body: ShortArray)
 
   @POST("postSerializable") suspend fun postSerializable(@Body(JSON) body: Node)
+
   @POST("postSerializableWithGeneric") suspend fun postSerializableWithGeneric(@Body(JSON) body: Wrapper<String>)
+
   @POST("postJsonElement") suspend fun postJsonElement(@Body(JSON) body: JsonElement)
 
   @POST("postArray") suspend fun postArray(@Body(JSON) body: Array<Node>)
+
   @POST("postList") suspend fun postList(@Body(JSON) body: List<Wrapper<String>>)
+
   @POST("postSet") suspend fun postSet(@Body(JSON) body: Set<Int>)
+
   @POST("postMap") suspend fun postMap(@Body(JSON) body: Map<String, Node>)
+
   @POST("postMapEntry") suspend fun postMapEntry(@Body(JSON) body: Map.Entry<String, Boolean>)
+
   @POST("postPair") suspend fun postPair(@Body(JSON) body: Pair<Long, Node>)
+
   @POST("postTriple") suspend fun postTriple(@Body(JSON) body: Triple<String, Wrapper<String>, Double>)
 
   @POST("postNullableString") suspend fun postNullableString(@Body(JSON) body: String?)
+
   @POST("postNullableIntArray") suspend fun postNullableIntArray(@Body(JSON) body: IntArray?)
+
   @POST("postNullableSerializable") suspend fun postNullableSerializable(@Body(JSON) body: Node?)
+
   @POST("postNullableList") suspend fun postNullableList(@Body(JSON) body: List<Wrapper<String>>?)
+
   @POST("postNullableMap") suspend fun postNullableMap(@Body(JSON) body: Map<String, Node>?)
 
   @POST("postGif") suspend fun postGif(@Body("image/gif") body: String)
+
   @POST("postGif") suspend fun postGifResult(@Body("image/gif") body: String): HttpResult<*>
+
   @POST("postContentTypeWithCharset") suspend fun postContentTypeWithCharset(
     @Body("$JSON; charset=UTF-8") body: String
   )
 
   @POST("postHttpBody") suspend fun postHttpBody(@Body(JSON) body: HttpBody<String>)
+
   @POST("postNullableHttpBody") suspend fun postNullableHttpBody(@Body(JSON) body: HttpBody<String>?)
 }
 

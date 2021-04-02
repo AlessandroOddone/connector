@@ -11,20 +11,32 @@ private val BASE_URL = Url("https://methods/")
 
 @Service interface MethodsTestService {
   @DELETE("delete") suspend fun delete()
+
   @GET("get") suspend fun get()
+
   @HEAD("head") suspend fun head()
+
   @OPTIONS("options") suspend fun options()
+
   @PATCH("patch") suspend fun patch()
+
   @POST("post") suspend fun post()
+
   @PUT("put") suspend fun put()
+
   @HTTP(method = "CUSTOM", url = "customMethod") suspend fun customMethod()
 
   // Valid return types for @HEAD
   @HEAD("head") suspend fun headResult(): HttpResult<Unit>
+
   @HEAD("head") suspend fun headResponse(): HttpResponse<Unit>
+
   @HEAD("head") suspend fun headResponseSuccess(): HttpResponse.Success<Unit>
+
   @HEAD("head") suspend fun headResultStar(): HttpResult<*>
+
   @HEAD("head") suspend fun headResponseStar(): HttpResponse<*>
+
   @HEAD("head") suspend fun headResponseSuccessStar(): HttpResponse.Success<*>
 }
 

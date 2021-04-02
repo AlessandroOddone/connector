@@ -41,61 +41,101 @@ private val BASE_URL = Url("https://responseBodies/")
 
 @Service interface ResponseBodiesTestService {
   @GET("getBoolean") suspend fun getBoolean(): Boolean
+
   @GET("getByte") suspend fun getByte(): Byte
+
   @GET("getChar") suspend fun getChar(): Char
+
   @GET("getDouble") suspend fun getDouble(): Double
+
   @GET("getFloat") suspend fun getFloat(): Float
+
   @GET("getInt") suspend fun getInt(): Int
+
   @GET("getLong") suspend fun getLong(): Long
+
   @GET("getShort") suspend fun getShort(): Short
+
   @GET("getString") suspend fun getString(): String
 
   @GET("getBooleanArray") suspend fun getBooleanArray(): BooleanArray
+
   @GET("getByteArray") suspend fun getByteArray(): ByteArray
+
   @GET("getCharArray") suspend fun getCharArray(): CharArray
+
   @GET("getDoubleArray") suspend fun getDoubleArray(): DoubleArray
+
   @GET("getFloatArray") suspend fun getFloatArray(): FloatArray
+
   @GET("getIntArray") suspend fun getIntArray(): IntArray
+
   @GET("getLongArray") suspend fun getLongArray(): LongArray
+
   @GET("getShortArray") suspend fun getShortArray(): ShortArray
 
   @GET("getSerializable") suspend fun getSerializable(): Node
+
   @GET("getSerializableWithGeneric") suspend fun getSerializableWithGeneric(): Wrapper<String>
+
   @GET("getJsonElement") suspend fun getJsonElement(): JsonElement
 
   @GET("getArray") suspend fun getArray(): Array<Node>
+
   @GET("getList") suspend fun getList(): List<Wrapper<String>>
+
   @GET("getSet") suspend fun getSet(): Set<Int>
+
   @GET("getMap") suspend fun getMap(): Map<String, Node>
+
   @GET("getMapEntry") suspend fun getMapEntry(): Map.Entry<String, Boolean>
+
   @GET("getPair") suspend fun getPair(): Pair<Long, Node>
+
   @GET("getTriple") suspend fun getTriple(): Triple<String, Wrapper<String>, Double>
 
   @GET("getNullableString") suspend fun getNullableString(): String?
+
   @GET("getNullableIntArray") suspend fun getNullableIntArray(): IntArray?
+
   @GET("getNullableSerializable") suspend fun getNullableSerializable(): Node?
+
   @GET("getNullableList") suspend fun getNullableList(): List<Wrapper<String>>?
+
   @GET("getNullableMap") suspend fun getNullableMap(): Map<String, Node>?
 
   @GET("getStringHttpResult") suspend fun getStringHttpResult(): HttpResult<String>
+
   @GET("getUnitHttpResult") suspend fun getUnitHttpResult(): HttpResult<Unit>
+
   @GET("getWildcardHttpResult") suspend fun getWildcardHttpResult(): HttpResult<*>
+
   @GET("getHttpBodyHttpResult") suspend fun getHttpBodyHttpResult(): HttpResult<HttpBody<Boolean>>
+
   @GET("getNullableHttpBodyHttpResult") suspend fun getNullableHttpBodyHttpResult(): HttpResult<HttpBody<Boolean>?>
 
   @GET("getStringHttpResponse") suspend fun getStringHttpResponse(): HttpResponse<String>
+
   @GET("getUnitHttpResponse") suspend fun getUnitHttpResponse(): HttpResponse<Unit>
+
   @GET("getWildcardHttpResponse") suspend fun getWildcardHttpResponse(): HttpResponse<*>
+
   @GET("getHttpBodyHttpResponse") suspend fun getHttpBodyHttpResponse(): HttpResponse<HttpBody<Boolean>>
+
   @GET("getNullableHttpBodyHttpResponse") suspend fun getNullableHttpBodyHttpResponse(): HttpResponse<HttpBody<Boolean>?>
 
   @GET("getStringHttpResponseSuccess") suspend fun getStringHttpResponseSuccess(): HttpResponse.Success<String>
+
   @GET("getUnitHttpResponseSuccess") suspend fun getUnitHttpResponseSuccess(): HttpResponse.Success<Unit>
+
   @GET("getWildcardHttpResponseSuccess") suspend fun getWildcardHttpResponseSuccess(): HttpResponse.Success<*>
+
   @GET("getHttpBodyHttpResponseSuccess") suspend fun getHttpBodyHttpResponseSuccess(): HttpResponse.Success<HttpBody<Boolean>>
+
   @GET("getNullableHttpBodyHttpResponseSuccess") suspend fun getNullableHttpBodyHttpResponseSuccess(): HttpResponse.Success<HttpBody<Boolean>?>
 
   @GET("getStringHttpBody") suspend fun getStringHttpBody(): HttpBody<String>
+
   @GET("getStringNullableHttpBody") suspend fun getStringNullableHttpBody(): HttpBody<String>?
 }
 
