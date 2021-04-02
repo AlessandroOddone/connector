@@ -63,11 +63,15 @@ internal class ServiceParser(logger: KSPLogger) {
           ?.parseServiceFunction()
       }
 
-    if (logger.hasErrors) null else ServiceDescription(
-      name = serviceName,
-      functions = serviceFunctions,
-      parentInterface = className()!!
-    )
+    if (logger.hasErrors) {
+      null
+    } else {
+      ServiceDescription(
+        name = serviceName,
+        functions = serviceFunctions,
+        parentInterface = className()!!
+      )
+    }
   }
 
   private fun KSFunctionDeclaration.parseServiceFunction(): ServiceDescription.Function? {
