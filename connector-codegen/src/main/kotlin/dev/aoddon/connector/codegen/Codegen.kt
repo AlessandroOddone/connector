@@ -775,7 +775,6 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
 
           is ServiceDescription.HttpContent.Multipart.PartContent.Iterable -> {
             val iterableTypeName = parameters.getValue(partContent.valueProviderParameter)
-            val partTypeName = (iterableTypeName as ParameterizedTypeName).typeArguments.first()
             beginControlFlow(
               "%L%L.%M",
               partContent.valueProviderParameter,
@@ -784,12 +783,12 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
             )
             // null metadata encodes raw parts
             if (partContent.metadata == null) {
-              add(appendRawPart(referenceLiteral = "it", typeName = partTypeName))
+              add(appendRawPart(referenceLiteral = "it", typeName = partContent.type.valueTypeName))
             } else {
               add(
                 appendPart(
                   referenceLiteral = "it",
-                  typeName = partTypeName,
+                  typeName = partContent.type.valueTypeName,
                   contentType = partContent.metadata.contentType,
                   formFieldNameLiteral = partContent.metadata.formFieldName?.let { "\"$it\"" },
                   isIsolatedBlock = true
@@ -803,23 +802,8 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
             val mapTypeName = parameters.getValue(partContent.valueProviderParameter)
             val partTypeName = when (partContent.type) {
               ServiceDescription.MapType.KtorStringValues -> STRING
-              is ServiceDescription.MapType.Map -> {
-                // Map<String, T>
-                (mapTypeName as? ParameterizedTypeName) ?: error("Unexpected Map type: $mapTypeName")
-                mapTypeName.typeArguments.last()
-              }
-              is ServiceDescription.MapType.IterableKeyValuePairs -> {
-                // Iterable<Pair<String, T>>
-                (mapTypeName as? ParameterizedTypeName) ?: error("Unexpected Iterable type: $mapTypeName")
-                val pairTypeName = mapTypeName.typeArguments.first()
-                check(
-                  pairTypeName is ParameterizedTypeName &&
-                    pairTypeName.rawType.canonicalName == "kotlin.Pair"
-                ) {
-                  "Unexpected key-value pair type: $mapTypeName"
-                }
-                pairTypeName.typeArguments.last()
-              }
+              is ServiceDescription.MapType.IterableKeyValuePairs -> partContent.type.valueType.typeName
+              is ServiceDescription.MapType.Map -> partContent.type.valueType.typeName
             }
             beginControlFlow(
               "%L%L.%M { %Lname, value%L ->",
@@ -1826,19 +1810,17 @@ private fun addMapToParameterBuilderCodeBlock(
     }
 
     is ServiceDescription.MapType.Map -> {
-      // Map<String, T>
-      val valueTypeName = (typeName as ParameterizedTypeName).typeArguments[1]
-      val valueTypeQualifiedName = valueTypeName.classNameOrNull()?.canonicalName
-
       beginControlFlow(
         "$parameterName%L.%M { (key, value) ->",
         if (typeName.isNullable) "?" else "",
         MemberName("kotlin.collections", "forEach")
       )
 
-      if (valueTypeName.isNullable) {
+      if (mapType.valueType.typeName.isNullable) {
         beginControlFlow("if (value != null)")
       }
+
+      val valueTypeQualifiedName = mapType.valueType.typeName.classNameOrNull()?.canonicalName
 
       when {
         valueTypeQualifiedName == "kotlin.String" -> {
@@ -1848,23 +1830,22 @@ private fun addMapToParameterBuilderCodeBlock(
           )
         }
 
-        mapType.hasIterableValues -> {
-          val iterableTypeArgumentName = (valueTypeName as ParameterizedTypeName).typeArguments[0]
+        mapType.valueType is ServiceDescription.MapType.ValueType.Iterable -> {
           when {
-            iterableTypeArgumentName.classNameOrNull()?.canonicalName != "kotlin.String" -> {
+            mapType.valueType.valueTypeName.classNameOrNull()?.canonicalName != "kotlin.String" -> {
               addStatement(
                 "%LappendAll(key, value.%M { it%L.toString() })",
                 parametersBuilderNameReference?.let { "$it." }.orEmpty(),
                 MemberName(
                   "kotlin.collections",
-                  if (iterableTypeArgumentName.isNullable) "mapNotNull" else "map"
+                  if (mapType.valueType.valueTypeName.isNullable) "mapNotNull" else "map"
                 ),
-                if (iterableTypeArgumentName.isNullable) "?" else ""
+                if (mapType.valueType.valueTypeName.isNullable) "?" else ""
               )
             }
 
             // Iterable<String?>
-            iterableTypeArgumentName.isNullable -> {
+            mapType.valueType.valueTypeName.isNullable -> {
               addStatement(
                 "%LappendAll(key, value.%M())",
                 parametersBuilderNameReference?.let { "$it." }.orEmpty(),
@@ -1890,7 +1871,7 @@ private fun addMapToParameterBuilderCodeBlock(
         }
       }
 
-      if (valueTypeName.isNullable) {
+      if (mapType.valueType.typeName.isNullable) {
         endControlFlow()
       }
 
@@ -1898,27 +1879,17 @@ private fun addMapToParameterBuilderCodeBlock(
     }
 
     is ServiceDescription.MapType.IterableKeyValuePairs -> {
-      // Iterable<Pair<String, T>>
-      val pairTypeName = (typeName as ParameterizedTypeName).typeArguments.first()
-      check(
-        pairTypeName is ParameterizedTypeName &&
-          pairTypeName.rawType.canonicalName == "kotlin.Pair"
-      ) {
-        "Unexpected key-value pair type: $pairTypeName"
-      }
-
-      val valueTypeName = pairTypeName.typeArguments.last()
-      val valueTypeQualifiedName = valueTypeName.classNameOrNull()?.canonicalName
-
       beginControlFlow(
         "$parameterName%L.%M { (key, value) ->",
         if (typeName.isNullable) "?" else "",
         MemberName("kotlin.collections", "forEach")
       )
 
-      if (valueTypeName.isNullable) {
+      if (mapType.valueType.typeName.isNullable) {
         beginControlFlow("if (value != null)")
       }
+
+      val valueTypeQualifiedName = mapType.valueType.typeName.classNameOrNull()?.canonicalName
 
       when {
         valueTypeQualifiedName == "kotlin.String" -> {
@@ -1928,23 +1899,22 @@ private fun addMapToParameterBuilderCodeBlock(
           )
         }
 
-        mapType.hasIterableValues -> {
-          val iterableTypeArgumentName = (valueTypeName as ParameterizedTypeName).typeArguments.single()
+        mapType.valueType is ServiceDescription.MapType.ValueType.Iterable -> {
           when {
-            iterableTypeArgumentName.classNameOrNull()?.canonicalName != "kotlin.String" -> {
+            mapType.valueType.valueTypeName.classNameOrNull()?.canonicalName != "kotlin.String" -> {
               addStatement(
                 "%LappendAll(key, value.%M { it%L.toString() })",
                 parametersBuilderNameReference?.let { "$it." }.orEmpty(),
                 MemberName(
                   "kotlin.collections",
-                  if (iterableTypeArgumentName.isNullable) "mapNotNull" else "map"
+                  if (mapType.valueType.valueTypeName.isNullable) "mapNotNull" else "map"
                 ),
-                if (iterableTypeArgumentName.isNullable) "?" else ""
+                if (mapType.valueType.valueTypeName.isNullable) "?" else ""
               )
             }
 
             // Iterable<String?>
-            iterableTypeArgumentName.isNullable -> {
+            mapType.valueType.valueTypeName.isNullable -> {
               addStatement(
                 "%LappendAll(key, value.%M())",
                 parametersBuilderNameReference?.let { "$it." }.orEmpty(),
@@ -1970,7 +1940,7 @@ private fun addMapToParameterBuilderCodeBlock(
         }
       }
 
-      if (valueTypeName.isNullable) {
+      if (mapType.valueType.typeName.isNullable) {
         endControlFlow()
       }
 

@@ -2,7 +2,6 @@ package dev.aoddon.connector.codegen
 
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.TypeName
-import io.ktor.http.HttpHeaders
 
 public data class ServiceDescription(
   public val name: String,
@@ -26,12 +25,14 @@ public data class ServiceDescription(
       public sealed class Header {
         public data class SingleStatic(val name: String, val value: String) : Header()
         public data class SingleDynamic(val name: String, val valueProviderParameter: String) : Header()
-        public data class DynamicIterable(val name: String, val valueProviderParameter: String) : Header()
-        public data class DynamicMap(val type: MapType, val valueProviderParameter: String) : Header()
-      }
 
-      init {
-        validate()
+        public data class DynamicIterable(
+          val name: String,
+          val type: IterableType,
+          val valueProviderParameter: String,
+        ) : Header()
+
+        public data class DynamicMap(val type: MapType, val valueProviderParameter: String) : Header()
       }
     }
   }
@@ -53,7 +54,13 @@ public data class ServiceDescription(
 
     public sealed class QueryParameter {
       public data class Single(val name: String, val valueProviderParameter: String) : QueryParameter()
-      public data class Iterable(val name: String, val valueProviderParameter: String) : QueryParameter()
+
+      public data class Iterable(
+        val name: String,
+        val type: IterableType,
+        val valueProviderParameter: String,
+      ) : QueryParameter()
+
       public data class Map(val type: MapType, val valueProviderParameter: String) : QueryParameter()
     }
   }
@@ -67,19 +74,27 @@ public data class ServiceDescription(
     public data class FormUrlEncoded(val fields: List<FieldContent>) : HttpContent() {
       public sealed class FieldContent {
         public data class Single(val name: String, val valueProviderParameter: String) : FieldContent()
-        public data class Iterable(val name: String, val valueProviderParameter: String) : FieldContent()
-        public data class Map(val type: MapType, val valueProviderParameter: String) : FieldContent()
-      }
 
-      init {
-        validate()
+        public data class Iterable(
+          val name: String,
+          val type: IterableType,
+          val valueProviderParameter: String
+        ) : FieldContent()
+
+        public data class Map(val type: MapType, val valueProviderParameter: String) : FieldContent()
       }
     }
 
     public data class Multipart(val subtype: String, val parts: List<PartContent>) : HttpContent() {
       public sealed class PartContent {
         public data class Single(val valueProviderParameter: String, val metadata: PartMetadata?) : PartContent()
-        public data class Iterable(val valueProviderParameter: String, val metadata: PartMetadata?) : PartContent()
+
+        public data class Iterable(
+          val type: IterableType,
+          val valueProviderParameter: String,
+          val metadata: PartMetadata?
+        ) : PartContent()
+
         public data class Map(
           val type: MapType,
           val valueProviderParameter: String,
@@ -91,49 +106,27 @@ public data class ServiceDescription(
         public val contentType: String,
         public val formFieldName: String?
       )
-
-      init {
-        validate()
-      }
     }
   }
 
+  public data class IterableType(val valueTypeName: TypeName)
+
   public sealed class MapType {
-    public data class Map(val hasIterableValues: Boolean) : MapType()
-    public data class IterableKeyValuePairs(val hasIterableValues: Boolean) : MapType()
+    public data class Map(val valueType: ValueType) : MapType()
+
+    public data class IterableKeyValuePairs(val valueType: ValueType) : MapType()
+
     public object KtorStringValues : MapType() {
       override fun toString(): String = "KtorStringValues"
+    }
+
+    public sealed class ValueType {
+      public abstract val typeName: TypeName
+
+      public data class Single(override val typeName: TypeName) : ValueType()
+      public data class Iterable(override val typeName: TypeName, val valueTypeName: TypeName) : ValueType()
     }
   }
 }
 
 public enum class UrlType { ABSOLUTE, FULL, PROTOCOL_RELATIVE, RELATIVE }
-
-private fun ServiceDescription.Function.Http.validate() {
-  check(
-    headers.none { content ->
-      when (content) {
-        is ServiceDescription.Function.Http.Header.SingleStatic -> {
-          content.name == HttpHeaders.ContentType || content.name == HttpHeaders.ContentLength
-        }
-        is ServiceDescription.Function.Http.Header.SingleDynamic -> {
-          content.name == HttpHeaders.ContentType || content.name == HttpHeaders.ContentLength
-        }
-        is ServiceDescription.Function.Http.Header.DynamicIterable -> {
-          content.name == HttpHeaders.ContentType || content.name == HttpHeaders.ContentLength
-        }
-        is ServiceDescription.Function.Http.Header.DynamicMap -> false
-      }
-    }
-  ) {
-    "'headers' must not contain ${HttpHeaders.ContentType} or ${HttpHeaders.ContentLength}. Found: $headers"
-  }
-}
-
-private fun ServiceDescription.HttpContent.FormUrlEncoded.validate() {
-  check(fields.isNotEmpty()) { "'fields' should not be empty." }
-}
-
-private fun ServiceDescription.HttpContent.Multipart.validate() {
-  check(parts.isNotEmpty()) { "'parts' should not be empty." }
-}
