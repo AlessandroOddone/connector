@@ -290,55 +290,7 @@ internal class ServiceParser(logger: KSPLogger) {
       }
     }
 
-    val dynamicQueryParameters: List<ServiceDescription.Url.QueryContent> = allParameterAnnotations
-      .asSequence()
-      .filterIsInstance<HttpParameterAnnotation.Query>()
-      .mapNotNull { queryAnnotation ->
-        when (queryAnnotation) {
-          is HttpParameterAnnotation.Query.Single -> {
-            ServiceDescription.Url.QueryContent.Parameter(
-              parameterName = queryAnnotation.parameter.name?.asString() ?: return@mapNotNull null,
-              key = queryAnnotation.name
-            )
-          }
-          is HttpParameterAnnotation.Query.Map -> {
-            ServiceDescription.Url.QueryContent.Map(
-              parameterName = queryAnnotation.parameter.name?.asString() ?: return@mapNotNull null
-            )
-          }
-        }
-      }
-      .toList()
-
-    val httpMethodAnnotation = httpMethodAnnotations.firstOrNull()
-    val url = httpMethodAnnotation?.let {
-      if (httpMethodAnnotation.urlTemplate != null) {
-        val parameterNamesByReplaceBlock = pathAnnotationsByName
-          .asSequence()
-          .mapNotNull { (name, pathAnnotations) ->
-            val annotation = pathAnnotations.firstOrNull() ?: return@mapNotNull null
-            val parameterName = annotation.parameter.name?.asString() ?: return@mapNotNull null
-            "{$name}" to parameterName
-          }
-          .toMap()
-
-        ServiceDescription.Url.Template(
-          value = httpMethodAnnotation.urlTemplate,
-          type = httpMethodAnnotation.urlTemplate.urlType(httpMethodAnnotation.annotation),
-          parameterNamesByReplaceBlock = parameterNamesByReplaceBlock,
-          dynamicQueryParameters = dynamicQueryParameters
-        )
-      } else {
-        urlAnnotations.firstOrNull()?.parameter?.name?.asString()?.let { parameterName ->
-          ServiceDescription.Url.Dynamic(
-            parameterName = parameterName,
-            dynamicQueryParameters = dynamicQueryParameters
-          )
-        }
-      }
-    }
-
-    val serviceFunctionParameters: Map<String, TypeName>? = allParameterAnnotations
+    val serviceFunctionParameters: Map<String, TypeInfo>? = allParameterAnnotations
       .mapNotNull { httpParameterAnnotation ->
         val parameterTypeReference = httpParameterAnnotation.parameter.type
 
@@ -407,9 +359,8 @@ internal class ServiceParser(logger: KSPLogger) {
         }
 
         val parameterName = httpParameterAnnotation.parameter.name?.asString()
-        val typeName = typeInfo?.typeName
-        if (parameterName != null && typeName != null) {
-          parameterName to typeName
+        if (parameterName != null && typeInfo?.typeName != null) {
+          parameterName to typeInfo
         } else {
           null
         }
@@ -417,7 +368,67 @@ internal class ServiceParser(logger: KSPLogger) {
       .toMap()
       .takeIf { it.size == allParameterAnnotations.size }
 
-    val headers: List<ServiceDescription.Function.Http.HeaderContent> = findStaticHeaders() + allParameterAnnotations
+    val dynamicQueryParameters: List<ServiceDescription.Url.QueryParameter> = allParameterAnnotations
+      .asSequence()
+      .filterIsInstance<HttpParameterAnnotation.Query>()
+      .mapNotNull { queryAnnotation ->
+        when (queryAnnotation) {
+          is HttpParameterAnnotation.Query.Single -> {
+            val parameterName = queryAnnotation.parameter.name?.asString() ?: return@mapNotNull null
+            val typeInfo = serviceFunctionParameters?.get(parameterName) ?: return@mapNotNull null
+            if (typeInfo.isSupportedIterable) {
+              ServiceDescription.Url.QueryParameter.Iterable(
+                name = queryAnnotation.name,
+                valueProviderParameter = parameterName,
+              )
+            } else {
+              ServiceDescription.Url.QueryParameter.Single(
+                name = queryAnnotation.name,
+                valueProviderParameter = parameterName,
+              )
+            }
+          }
+          is HttpParameterAnnotation.Query.Map -> {
+            val parameterName = queryAnnotation.parameter.name?.asString() ?: return@mapNotNull null
+            val typeInfo = serviceFunctionParameters?.get(parameterName) ?: return@mapNotNull null
+            ServiceDescription.Url.QueryParameter.Map(
+              type = typeInfo.mapTypeOrNull() ?: return@mapNotNull null,
+              valueProviderParameter = parameterName
+            )
+          }
+        }
+      }
+      .toList()
+
+    val httpMethodAnnotation = httpMethodAnnotations.firstOrNull()
+    val url = httpMethodAnnotation?.let {
+      if (httpMethodAnnotation.urlTemplate != null) {
+        val parameterNamesByReplaceBlock = pathAnnotationsByName
+          .asSequence()
+          .mapNotNull { (name, pathAnnotations) ->
+            val annotation = pathAnnotations.firstOrNull() ?: return@mapNotNull null
+            val parameterName = annotation.parameter.name?.asString() ?: return@mapNotNull null
+            "{$name}" to parameterName
+          }
+          .toMap()
+
+        ServiceDescription.Url.Template(
+          value = httpMethodAnnotation.urlTemplate,
+          type = httpMethodAnnotation.urlTemplate.urlType(httpMethodAnnotation.annotation),
+          valueProviderParametersByReplaceBlock = parameterNamesByReplaceBlock,
+          dynamicQueryParameters = dynamicQueryParameters
+        )
+      } else {
+        urlAnnotations.firstOrNull()?.parameter?.name?.asString()?.let { parameterName ->
+          ServiceDescription.Url.Dynamic(
+            valueProviderParameter = parameterName,
+            dynamicQueryParameters = dynamicQueryParameters
+          )
+        }
+      }
+    }
+
+    val headers: List<ServiceDescription.Function.Http.Header> = findStaticHeaders() + allParameterAnnotations
       .asSequence()
       .filterIsInstance<HttpParameterAnnotation.Header>()
       .mapNotNull { headerAnnotation ->
@@ -438,15 +449,27 @@ internal class ServiceParser(logger: KSPLogger) {
               )
               return@mapNotNull null
             }
-            ServiceDescription.Function.Http.HeaderContent.Parameter(
-              parameterName = headerAnnotation.parameter.name?.asString() ?: return@mapNotNull null,
-              headerName = headerName
-            )
+            val parameterName = headerAnnotation.parameter.name?.asString() ?: return@mapNotNull null
+            val typeInfo = serviceFunctionParameters?.get(parameterName) ?: return@mapNotNull null
+            if (typeInfo.isSupportedIterable) {
+              ServiceDescription.Function.Http.Header.DynamicIterable(
+                name = headerName,
+                valueProviderParameter = parameterName,
+              )
+            } else {
+              ServiceDescription.Function.Http.Header.SingleDynamic(
+                name = headerName,
+                valueProviderParameter = parameterName,
+              )
+            }
           }
 
           is HttpParameterAnnotation.Header.Map -> {
-            ServiceDescription.Function.Http.HeaderContent.Map(
-              parameterName = headerAnnotation.parameter.name?.asString() ?: return@mapNotNull null
+            val parameterName = headerAnnotation.parameter.name?.asString() ?: return@mapNotNull null
+            val typeInfo = serviceFunctionParameters?.get(parameterName) ?: return@mapNotNull null
+            ServiceDescription.Function.Http.Header.DynamicMap(
+              type = typeInfo.mapTypeOrNull() ?: return@mapNotNull null,
+              valueProviderParameter = parameterName
             )
           }
         }
@@ -470,26 +493,26 @@ internal class ServiceParser(logger: KSPLogger) {
     val parts: List<ServiceDescription.HttpContent.Multipart.PartContent> = partAnnotations
       .mapNotNull { partAnnotation ->
         val parameterName = partAnnotation.parameter.name?.asString() ?: return@mapNotNull null
+        val partParameterTypeInfo = serviceFunctionParameters?.get(parameterName) ?: return@mapNotNull null
 
         if (partAnnotation is HttpParameterAnnotation.Part.Map) {
           return@mapNotNull ServiceDescription.HttpContent.Multipart.PartContent.Map(
-            parameterName = parameterName,
+            type = partParameterTypeInfo.mapTypeOrNull() ?: return@mapNotNull null,
+            valueProviderParameter = parameterName,
             contentType = partAnnotation.contentType
           )
         }
 
-        val partParameterType = serviceFunctionParameters?.get(parameterName) ?: return@mapNotNull null
-
-        val isPartData = with(partParameterType) {
-          val canonicalName = classNameOrNull()?.canonicalName
+        val isPartData = with(partParameterTypeInfo) {
+          val canonicalName = typeName?.classNameOrNull()?.canonicalName
           when {
             canonicalName == null -> false
 
             PART_DATA_TYPE_QUALIFIED_NAMES.contains(canonicalName) -> true
 
-            ServiceDescription.SUPPORTED_ITERABLE_TYPES.any { it.canonicalName == canonicalName } -> {
-              this as ParameterizedTypeName
-              typeArguments.any { typeArgument ->
+            isSupportedIterable -> {
+              typeName as ParameterizedTypeName
+              typeName.typeArguments.any { typeArgument ->
                 val typeArgumentCanonicalName = typeArgument.classNameOrNull()?.canonicalName
                 PART_DATA_TYPE_QUALIFIED_NAMES.contains(typeArgumentCanonicalName)
               }
@@ -534,14 +557,14 @@ internal class ServiceParser(logger: KSPLogger) {
           }
           return@mapNotNull when (partAnnotation) {
             is HttpParameterAnnotation.Part.Single -> {
-              ServiceDescription.HttpContent.Multipart.PartContent.Parameter(
-                parameterName = parameterName,
+              ServiceDescription.HttpContent.Multipart.PartContent.Single(
+                valueProviderParameter = parameterName,
                 metadata = null
               )
             }
             is HttpParameterAnnotation.Part.Iterable -> {
               ServiceDescription.HttpContent.Multipart.PartContent.Iterable(
-                parameterName = parameterName,
+                valueProviderParameter = parameterName,
                 metadata = null
               )
             }
@@ -577,12 +600,12 @@ internal class ServiceParser(logger: KSPLogger) {
           formFieldName = formFieldName
         )
         when (partAnnotation) {
-          is HttpParameterAnnotation.Part.Single -> ServiceDescription.HttpContent.Multipart.PartContent.Parameter(
-            parameterName = parameterName,
+          is HttpParameterAnnotation.Part.Single -> ServiceDescription.HttpContent.Multipart.PartContent.Single(
+            valueProviderParameter = parameterName,
             metadata = partMetadata
           )
           is HttpParameterAnnotation.Part.Iterable -> ServiceDescription.HttpContent.Multipart.PartContent.Iterable(
-            parameterName = parameterName,
+            valueProviderParameter = parameterName,
             metadata = partMetadata
           )
           else -> error("Unexpected partAnnotation type: $partAnnotation")
@@ -594,22 +617,34 @@ internal class ServiceParser(logger: KSPLogger) {
 
     fun content(): ServiceDescription.HttpContent? = when {
       bodyParameterName != null && bodyContentType != null -> ServiceDescription.HttpContent.Body(
-        parameterName = bodyParameterName,
+        valueProviderParameter = bodyParameterName,
         contentType = bodyContentType
       )
 
       fieldAnnotations.isNotEmpty() -> ServiceDescription.HttpContent.FormUrlEncoded(
-        fields = fieldAnnotations.map { fieldAnnotation ->
+        fields = fieldAnnotations.mapNotNull { fieldAnnotation ->
           when (fieldAnnotation) {
             is HttpParameterAnnotation.Field.Single -> {
-              ServiceDescription.HttpContent.FormUrlEncoded.FieldContent.Parameter(
-                parameterName = fieldAnnotation.parameter.name?.asString() ?: return null,
-                fieldName = fieldAnnotation.name
-              )
+              val parameterName = fieldAnnotation.parameter.name?.asString() ?: return@mapNotNull null
+              val typeInfo = serviceFunctionParameters?.get(parameterName) ?: return@mapNotNull null
+              if (typeInfo.isSupportedIterable) {
+                ServiceDescription.HttpContent.FormUrlEncoded.FieldContent.Iterable(
+                  name = fieldAnnotation.name,
+                  valueProviderParameter = parameterName,
+                )
+              } else {
+                ServiceDescription.HttpContent.FormUrlEncoded.FieldContent.Single(
+                  name = fieldAnnotation.name,
+                  valueProviderParameter = parameterName,
+                )
+              }
             }
             is HttpParameterAnnotation.Field.Map -> {
+              val parameterName = fieldAnnotation.parameter.name?.asString() ?: return@mapNotNull null
+              val typeInfo = serviceFunctionParameters?.get(parameterName) ?: return@mapNotNull null
               ServiceDescription.HttpContent.FormUrlEncoded.FieldContent.Map(
-                parameterName = fieldAnnotation.parameter.name?.asString() ?: return null,
+                type = typeInfo.mapTypeOrNull() ?: return@mapNotNull null,
+                valueProviderParameter = parameterName,
               )
             }
           }
@@ -635,12 +670,12 @@ internal class ServiceParser(logger: KSPLogger) {
       if (streamingLambdaParameterName == null) {
         streamingLambdaParameterName = parameterName
       }
-      val parameterType = serviceFunctionParameters?.get(parameterName) ?: return@forEach
+      val parameterTypeName = serviceFunctionParameters?.get(parameterName)?.typeName ?: return@forEach
 
       fun validateParameterType() {
         fun logError() {
           logger.error(
-            "Invalid @Streaming parameter type: '$parameterType'. Expected a non-nullable suspending lambda " +
+            "Invalid @Streaming parameter type: '$parameterTypeName'. Expected a non-nullable suspending lambda " +
               "with no receiver and exactly one of the following (non-nullable) parameters: ByteReadChannel, " +
               "HttpResult<ByteReadChannel>, HttpResponse<ByteReadChannel>, or HttpResponse.Success<ByteReadChannel>.",
             streamingAnnotation.parameter
@@ -648,18 +683,18 @@ internal class ServiceParser(logger: KSPLogger) {
         }
 
         if (
-          parameterType !is LambdaTypeName ||
-          !parameterType.isSuspending ||
-          parameterType.isNullable ||
-          parameterType.receiver != null ||
-          parameterType.parameters.size != 1 ||
-          parameterType.parameters.single().type.isNullable
+          parameterTypeName !is LambdaTypeName ||
+          !parameterTypeName.isSuspending ||
+          parameterTypeName.isNullable ||
+          parameterTypeName.receiver != null ||
+          parameterTypeName.parameters.size != 1 ||
+          parameterTypeName.parameters.single().type.isNullable
         ) {
           logError()
           return
         }
 
-        val lambdaParameterType = parameterType.parameters.single().type
+        val lambdaParameterType = parameterTypeName.parameters.single().type
 
         fun TypeName.isByteReadChannel(): Boolean {
           return this is ClassName && canonicalName == "io.ktor.utils.io.ByteReadChannel"
@@ -684,8 +719,8 @@ internal class ServiceParser(logger: KSPLogger) {
 
       validateParameterType()
 
-      if (parameterType is LambdaTypeName) {
-        if (parameterType.returnType != returnTypeInfo?.typeName) {
+      if (parameterTypeName is LambdaTypeName) {
+        if (parameterTypeName.returnType != returnTypeInfo?.typeName) {
           logger.error(
             "@Streaming lambda return type must match the function return type.",
             this
@@ -705,12 +740,12 @@ internal class ServiceParser(logger: KSPLogger) {
 
     return ServiceDescription.Function.Http(
       name = simpleName.asString(),
-      parameters = serviceFunctionParameters,
+      parameters = serviceFunctionParameters.mapValues { (_, typeInfo) -> typeInfo.typeName!! },
       method = httpMethodAnnotation.method,
       url = url,
       headers = headers,
       content = content(),
-      streamingLambdaParameterName = streamingLambdaParameterName,
+      streamingLambdaProviderParameter = streamingLambdaParameterName,
       returnType = returnTypeInfo.typeName
     )
   }
@@ -802,7 +837,7 @@ internal class ServiceParser(logger: KSPLogger) {
     }
   }
 
-  private fun KSFunctionDeclaration.findStaticHeaders(): List<ServiceDescription.Function.Http.HeaderContent.Static> {
+  private fun KSFunctionDeclaration.findStaticHeaders(): List<ServiceDescription.Function.Http.Header.SingleStatic> {
     return annotations
       .asSequence()
       .filter { it.shortName.asString() == "Headers" }
@@ -837,7 +872,7 @@ internal class ServiceParser(logger: KSPLogger) {
           }
           val value = colonSplits[1].trimStart()
           validateHeaderValue(value, annotation)
-          ServiceDescription.Function.Http.HeaderContent.Static(name = name, value = value)
+          ServiceDescription.Function.Http.Header.SingleStatic(name = name, value = value)
         }
       }
       .toList()
@@ -992,7 +1027,7 @@ internal class ServiceParser(logger: KSPLogger) {
 
   private enum class TypeValidationTarget(
     val expectsSerializableContent: Boolean,
-    val expectsMany: ExpectsManyType? = null,
+    val expectsMany: ExpectsMany? = null,
     val nonSerializableAllowedCanonicalNames: List<String> = emptyList(),
     val nullNotAllowedCanonicalNames: List<String> = emptyList()
   ) {
@@ -1001,7 +1036,7 @@ internal class ServiceParser(logger: KSPLogger) {
       nonSerializableAllowedCanonicalNames = listOf(HTTP_BODY_QUALIFIED_NAME)
     ),
     HTTP_FIELD_MAP_PARAMETER(
-      expectsMany = ExpectsManyType.MAP,
+      expectsMany = ExpectsMany.MULTIMAP,
       expectsSerializableContent = false,
       nonSerializableAllowedCanonicalNames = listOf(HTTP_BODY_QUALIFIED_NAME)
     ),
@@ -1014,7 +1049,7 @@ internal class ServiceParser(logger: KSPLogger) {
       nullNotAllowedCanonicalNames = NON_ERROR_HTTP_RESULT_TYPES_QUALIFIED_NAMES + "kotlin.Unit"
     ),
     HTTP_HEADER_MAP_PARAMETER(
-      expectsMany = ExpectsManyType.MAP,
+      expectsMany = ExpectsMany.MULTIMAP,
       expectsSerializableContent = false
     ),
     HTTP_PART_PARAMETER(
@@ -1024,23 +1059,23 @@ internal class ServiceParser(logger: KSPLogger) {
       ) + PART_DATA_TYPE_QUALIFIED_NAMES
     ),
     HTTP_PART_ITERABLE_PARAMETER(
-      expectsMany = ExpectsManyType.ITERABLE,
+      expectsMany = ExpectsMany.ITERABLE,
       expectsSerializableContent = true,
       nonSerializableAllowedCanonicalNames = listOf(
         HTTP_BODY_QUALIFIED_NAME
       ) + PART_DATA_TYPE_QUALIFIED_NAMES
     ),
     HTTP_PART_MAP_PARAMETER(
-      expectsMany = ExpectsManyType.MULTIMAP,
+      expectsMany = ExpectsMany.MULTIMAP,
       expectsSerializableContent = true,
       nonSerializableAllowedCanonicalNames = listOf(HTTP_BODY_QUALIFIED_NAME)
     ),
     HTTP_QUERY_MAP_PARAMETER(
-      expectsMany = ExpectsManyType.MAP,
+      expectsMany = ExpectsMany.MULTIMAP,
       expectsSerializableContent = false
     );
 
-    enum class ExpectsManyType { ITERABLE, MAP, MULTIMAP }
+    enum class ExpectsMany { ITERABLE, MULTIMAP }
   }
 
   private fun KSTypeReference.typeInfoWithValidation(
@@ -1058,62 +1093,38 @@ internal class ServiceParser(logger: KSPLogger) {
 
     val rootTypeInfo = resolveTypeInfo() ?: return null
     val rootKsType = rootTypeInfo.ksType ?: return null
-    val rootTypeQualifiedOrSimpleName = with(rootKsType.declaration) {
-      (qualifiedName ?: simpleName).asString()
-    }
     val rootTypeNameForDiagnostics by lazy { rootTypeInfo.nameForDiagnostics() }
 
     when (target.expectsMany) {
-      TypeValidationTarget.ExpectsManyType.MAP -> {
+      TypeValidationTarget.ExpectsMany.MULTIMAP -> {
         if (
-          rootTypeQualifiedOrSimpleName != "kotlin.collections.Map" &&
-          rootTypeQualifiedOrSimpleName != "io.ktor.util.StringValues"
+          !rootTypeInfo.isSupportedMap &&
+          !rootTypeInfo.isSupportedIterable &&
+          !rootTypeInfo.isSupportedKtorStringValues
         ) {
           val errorSubject = when (target) {
-            TypeValidationTarget.HTTP_FIELD_MAP_PARAMETER -> "@FieldMap parameter type"
-            TypeValidationTarget.HTTP_HEADER_MAP_PARAMETER -> "@HeaderMap parameter type"
-            TypeValidationTarget.HTTP_PART_MAP_PARAMETER -> "@PartMap parameter type"
-            TypeValidationTarget.HTTP_QUERY_MAP_PARAMETER -> "@QueryMap parameter type"
+            TypeValidationTarget.HTTP_FIELD_MAP_PARAMETER -> "@FieldMap parameter"
+            TypeValidationTarget.HTTP_HEADER_MAP_PARAMETER -> "@HeaderMap parameter"
+            TypeValidationTarget.HTTP_PART_MAP_PARAMETER -> "@PartMap parameter"
+            TypeValidationTarget.HTTP_QUERY_MAP_PARAMETER -> "@QueryMap parameter"
             else -> error("Unexpected type: $target")
           }
           logger.error(
-            "$errorSubject must be either 'kotlin.collections.Map' or 'io.ktor.util.StringValues'. " +
+            "$errorSubject must be of a supported Map, StringValues, or Iterable (of key-value pairs) type. " +
               "Found: '$rootTypeNameForDiagnostics'.",
             targetNode
           )
         }
       }
 
-      TypeValidationTarget.ExpectsManyType.MULTIMAP -> {
-        if (
-          rootTypeQualifiedOrSimpleName != "kotlin.collections.Map" &&
-          rootTypeQualifiedOrSimpleName != "io.ktor.util.StringValues" &&
-          !ServiceDescription.SUPPORTED_ITERABLE_TYPES.any { it.canonicalName == rootTypeQualifiedOrSimpleName }
-        ) {
+      TypeValidationTarget.ExpectsMany.ITERABLE -> {
+        if (!rootTypeInfo.isSupportedIterable) {
           val errorSubject = when (target) {
-            TypeValidationTarget.HTTP_FIELD_MAP_PARAMETER -> "@FieldMap parameter type"
-            TypeValidationTarget.HTTP_HEADER_MAP_PARAMETER -> "@HeaderMap parameter type"
-            TypeValidationTarget.HTTP_PART_MAP_PARAMETER -> "@PartMap parameter type"
-            TypeValidationTarget.HTTP_QUERY_MAP_PARAMETER -> "@QueryMap parameter type"
+            TypeValidationTarget.HTTP_PART_ITERABLE_PARAMETER -> "@PartIterable parameter"
             else -> error("Unexpected type: $target")
           }
           logger.error(
-            "$errorSubject must be either 'kotlin.collections.Map', 'io.ktor.util.StringValues'," +
-              " or an Iterable of key-value pairs. Found: '$rootTypeNameForDiagnostics'.",
-            targetNode
-          )
-        }
-      }
-
-      TypeValidationTarget.ExpectsManyType.ITERABLE -> {
-        if (!ServiceDescription.SUPPORTED_ITERABLE_TYPES.any { it.canonicalName == rootTypeQualifiedOrSimpleName }) {
-          val errorSubject = when (target) {
-            TypeValidationTarget.HTTP_PART_ITERABLE_PARAMETER -> "@PartIterable parameter type"
-            else -> error("Unexpected type: $target")
-          }
-          logger.error(
-            "$errorSubject must be one of: ${ServiceDescription.SUPPORTED_ITERABLE_TYPES.joinToString()}. " +
-              "Found: '$rootTypeNameForDiagnostics'.",
+            "$errorSubject must be of a supported Iterable type. Found: '$rootTypeNameForDiagnostics'.",
             targetNode
           )
         }
@@ -1122,6 +1133,8 @@ internal class ServiceParser(logger: KSPLogger) {
       null -> {
       }
     }
+
+    val rootTypeQualifiedOrSimpleName = with(rootKsType.declaration) { (qualifiedName ?: simpleName).asString() }
 
     if (
       target.expectsSerializableContent &&
@@ -1172,13 +1185,9 @@ internal class ServiceParser(logger: KSPLogger) {
         val typeArgumentNameForDiagnostics by lazy { argumentTypeInfo.nameForDiagnostics() }
 
         val isMapKeyType = when (target.expectsMany) {
-          // Map<K, V> -> K
-          TypeValidationTarget.ExpectsManyType.MAP -> depth == 0 && argumentIndex == 0
-
-          TypeValidationTarget.ExpectsManyType.MULTIMAP -> when {
+          TypeValidationTarget.ExpectsMany.MULTIMAP -> when {
             // Map<K, V> -> K
-            depth == 0 && argumentIndex == 0 &&
-              parentTypeInfo.ksType?.declaration?.qualifiedName?.asString() == "kotlin.collections.Map" -> true
+            depth == 0 && argumentIndex == 0 && parentTypeInfo.isSupportedMap -> true
 
             // List<Pair<K, V>> -> K
             depth == 1 && argumentIndex == 0 &&
@@ -1218,12 +1227,9 @@ internal class ServiceParser(logger: KSPLogger) {
         }
 
         // Validate multimap type arguments other than Map keys
-        if (target.expectsMany == TypeValidationTarget.ExpectsManyType.MULTIMAP) {
+        if (target.expectsMany == TypeValidationTarget.ExpectsMany.MULTIMAP) {
           // List<T> -> T
-          val isListItemType = depth == 0 && argumentIndex == 0 &&
-            ServiceDescription.SUPPORTED_ITERABLE_TYPES.any {
-              it.canonicalName == parentTypeInfo.ksType?.declaration?.qualifiedName?.asString()
-            }
+          val isListItemType = depth == 0 && argumentIndex == 0 && parentTypeInfo.isSupportedIterable
           if (isListItemType) {
             val errorSubject by lazy {
               when (target) {
@@ -1290,13 +1296,10 @@ internal class ServiceParser(logger: KSPLogger) {
         val checkNonSerializableAllowed = when (target.expectsMany) {
           null -> false
           // Iterable<T> -> T
-          TypeValidationTarget.ExpectsManyType.ITERABLE -> depth == 0 && argumentIndex == 0
+          TypeValidationTarget.ExpectsMany.ITERABLE -> depth == 0 && argumentIndex == 0
 
-          // Map<K, V> -> V
-          TypeValidationTarget.ExpectsManyType.MAP -> depth == 0 && argumentIndex == 1
-
-          TypeValidationTarget.ExpectsManyType.MULTIMAP -> {
-            if (rootTypeInfo.ksType.declaration.qualifiedName?.asString() == "kotlin.collections.Map") {
+          TypeValidationTarget.ExpectsMany.MULTIMAP -> {
+            if (rootTypeInfo.isSupportedMap) {
               // Map<K, V> -> V
               depth == 0 && argumentIndex == 1
             } else {
@@ -1545,6 +1548,19 @@ private fun KSAnnotation.resolveConnectorHttpAnnotation(): KSType? =
 
 private fun KSAnnotation.resolveAnnotationFromPackage(packageName: String): KSType? =
   annotationType.resolve().takeIf { it.packageName == packageName }
+
+private fun TypeInfo.mapTypeOrNull(): ServiceDescription.MapType? {
+  return when {
+    isSupportedMap -> ServiceDescription.MapType.Map(
+      hasIterableValues = arguments.lastOrNull()?.isSupportedIterable ?: return null
+    )
+    isSupportedIterable -> ServiceDescription.MapType.IterableKeyValuePairs(
+      hasIterableValues = arguments.singleOrNull()?.arguments?.lastOrNull()?.isSupportedIterable ?: return null
+    )
+    isSupportedKtorStringValues -> ServiceDescription.MapType.KtorStringValues
+    else -> null
+  }
+}
 
 private const val CORE_ANNOTATIONS_PACKAGE_NAME = "dev.aoddon.connector"
 

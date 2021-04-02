@@ -18,6 +18,9 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.STAR
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.WildcardTypeName
+import io.ktor.http.Headers
+import io.ktor.http.Parameters
+import io.ktor.util.StringValues
 
 internal val KSType.packageName get() = declaration.packageName.asString()
 
@@ -130,4 +133,26 @@ internal data class TypeInfo(
   val typeName: TypeName?,
   val arguments: List<TypeInfo>,
   val ksTypeArgument: KSTypeArgument?
+) {
+  val qualifiedName = ksType?.declaration?.qualifiedName?.asString()
+  val isSupportedIterable = SUPPORTED_ITERABLE_QUALIFIED_NAMES.contains(qualifiedName)
+  val isSupportedMap = SUPPORTED_MAP_QUALIFIED_NAMES.contains(qualifiedName)
+  val isSupportedKtorStringValues = SUPPORTED_STRING_VALUES_QUALIFIED_NAMES.contains(qualifiedName)
+}
+
+internal val SUPPORTED_ITERABLE_QUALIFIED_NAMES = listOf(
+  "kotlin.collections.Collection",
+  "kotlin.collections.Iterable",
+  "kotlin.collections.List",
+  "kotlin.collections.Set",
+)
+
+internal val SUPPORTED_MAP_QUALIFIED_NAMES = listOf(
+  "kotlin.collections.Map"
+)
+
+internal val SUPPORTED_STRING_VALUES_QUALIFIED_NAMES = listOf(
+  Headers::class.qualifiedName!!,
+  Parameters::class.qualifiedName!!,
+  StringValues::class.qualifiedName!!,
 )

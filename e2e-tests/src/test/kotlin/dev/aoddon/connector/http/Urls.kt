@@ -6,11 +6,13 @@ import dev.aoddon.connector.test.util.assertThrows
 import dev.aoddon.connector.util.assertHttpLogMatches
 import dev.aoddon.connector.util.runHttpTest
 import io.ktor.client.request.forms.submitFormWithBinaryData
+import io.ktor.http.Headers
 import io.ktor.http.Parameters
 import io.ktor.http.ParametersBuilder
 import io.ktor.http.URLBuilder
 import io.ktor.http.URLProtocol
 import io.ktor.http.Url
+import io.ktor.http.headersOf
 import io.ktor.http.parametersOf
 import io.ktor.util.StringValues
 import org.junit.Test
@@ -127,7 +129,9 @@ private val BASE_URL = Url("https://urls/base/")
     @Query("q") q6: Iterable<Any?>?,
     @QueryMap stringValues: StringValues?,
     @QueryMap map1: Map<String, List<String?>?>?,
-    @QueryMap map2: Map<String, Collection<Any?>?>?
+    @QueryMap map2: Map<String, Collection<Any?>?>?,
+    @QueryMap map3: List<Pair<String, Collection<String?>?>>?,
+    @QueryMap map4: List<Pair<String, Collection<Any?>?>>?
   )
 
   @GET("query/parameter/with/question/mark")
@@ -163,7 +167,22 @@ private val BASE_URL = Url("https://urls/base/")
   suspend fun queryParameterMapOfIterableAny(@QueryMap map: Map<String, Iterable<Any>>)
 
   @GET("get?q=static")
-  suspend fun queryParameterStringValues(@QueryMap stringValues: StringValues)
+  suspend fun queryMapStringValues(@QueryMap stringValues: StringValues)
+
+  @GET("get?q=static")
+  suspend fun queryMapParameters(@QueryMap parameters: Parameters)
+
+  @GET("get?q=static")
+  suspend fun queryMapHeaders(@QueryMap headers: Headers)
+
+  @GET("get?q=static")
+  suspend fun queryMapListOfPairsWithStringValues(@QueryMap entries: List<Pair<String, String>>)
+
+  @GET("get?q=static")
+  suspend fun queryMapListOfPairsWithAnyValues(@QueryMap entries: List<Pair<String, Any>>)
+
+  @GET("get?q=static")
+  suspend fun queryMapListOfPairsWithIterableValues(@QueryMap entries: List<Pair<String, Iterable<Any>>>)
 }
 
 class UrlsTest {
@@ -676,6 +695,8 @@ class UrlsTest {
       null,
       null,
       null,
+      null,
+      null,
       null
     )
     // [10, 20, 30, 40, 50, 60, 70]
@@ -687,13 +708,25 @@ class UrlsTest {
       listOf("50", null, "60"),
       setOf(null, "70", null),
       null,
-      null,
-      null
+      mapOf(
+        "q" to null,
+      ),
+      mapOf(
+        "q" to null,
+      ),
+      listOf(
+        "q" to listOf("80"),
+        "q" to null
+      ),
+      listOf(
+        "q" to null,
+        "q" to setOf("90", null)
+      )
     )
 
     assertHttpLogMatches(
       { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10") },
-      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=20&q=30&q=40&q=50&q=60&q=70") },
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=20&q=30&q=40&q=50&q=60&q=70&q=80&q=90") },
     )
   }
 
@@ -808,9 +841,9 @@ class UrlsTest {
   @Test fun `StringValues @QueryMap`() = runHttpTest {
     val service = UrlsTestService(BASE_URL, httpClient)
 
-    service.queryParameterStringValues(StringValues.Empty)
-    service.queryParameterStringValues(Parameters.Empty)
-    service.queryParameterStringValues(
+    service.queryMapStringValues(StringValues.Empty)
+    service.queryMapStringValues(Parameters.Empty)
+    service.queryMapStringValues(
       parametersOf(
         "q" to listOf("1"),
         "r" to listOf("2", "3")
@@ -826,6 +859,125 @@ class UrlsTest {
       },
       {
         hasUrl("https://urls/base/get?q=static&q=1&r=2&r=3")
+      }
+    )
+  }
+
+  @Test fun `Parameters @QueryMap`() = runHttpTest {
+    val service = UrlsTestService(BASE_URL, httpClient)
+
+    service.queryMapParameters(Parameters.Empty)
+    service.queryMapParameters(
+      parametersOf(
+        "q" to listOf("1"),
+        "r" to listOf("2", "3")
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasUrl("https://urls/base/get?q=static")
+      },
+      {
+        hasUrl("https://urls/base/get?q=static&q=1&r=2&r=3")
+      }
+    )
+  }
+
+  @Test fun `Headers @QueryMap`() = runHttpTest {
+    val service = UrlsTestService(BASE_URL, httpClient)
+
+    service.queryMapHeaders(Headers.Empty)
+    service.queryMapHeaders(
+      headersOf(
+        "q" to listOf("1"),
+        "r" to listOf("2", "3")
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasUrl("https://urls/base/get?q=static")
+      },
+      {
+        hasUrl("https://urls/base/get?q=static&q=1&r=2&r=3")
+      }
+    )
+  }
+
+  @Test fun `Key-value Pairs with String values @QueryMap`() = runHttpTest {
+    val service = UrlsTestService(BASE_URL, httpClient)
+
+    service.queryMapListOfPairsWithStringValues(emptyList())
+    service.queryMapListOfPairsWithStringValues(
+      listOf(
+        "q" to "1",
+        "r" to "2",
+        "r" to "3"
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasUrl("https://urls/base/get?q=static")
+      },
+      {
+        hasUrl("https://urls/base/get?q=static&q=1&r=2&r=3")
+      }
+    )
+  }
+
+  @Test fun `Key-value Pairs with Any values @QueryMap`() = runHttpTest {
+    val service = UrlsTestService(BASE_URL, httpClient)
+
+    service.queryMapListOfPairsWithAnyValues(emptyList())
+    service.queryMapListOfPairsWithAnyValues(
+      listOf(
+        "q" to object : Any() {
+          override fun toString() = "1"
+        },
+        "r" to object : Any() {
+          override fun toString() = "2"
+        },
+        "r" to object : Any() {
+          override fun toString() = "3"
+        }
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasUrl("https://urls/base/get?q=static")
+      },
+      {
+        hasUrl("https://urls/base/get?q=static&q=1&r=2&r=3")
+      }
+    )
+  }
+
+  @Test fun `Key-value Pairs with Iterable values @QueryMap`() = runHttpTest {
+    val service = UrlsTestService(BASE_URL, httpClient)
+
+    service.queryMapListOfPairsWithIterableValues(emptyList())
+    service.queryMapListOfPairsWithIterableValues(
+      listOf(
+        "q" to listOf("1"),
+        "q" to emptyList(),
+        "r" to listOf("2", "3"),
+        "r" to listOf(
+          object : Any() {
+            override fun toString() = "4"
+          }
+        )
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasUrl("https://urls/base/get?q=static")
+      },
+      {
+        hasUrl("https://urls/base/get?q=static&q=1&r=2&r=3&r=4")
       }
     )
   }
@@ -851,11 +1003,13 @@ class UrlsTest {
       mapOf(
         "q" to listOf(null, "e", null),
         "r" to setOf("f", null)
-      )
+      ),
+      listOf("q" to listOf(null, "g", null)),
+      listOf("r" to setOf("h", null))
     )
 
     assertHttpLogMatches {
-      hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=a&q=b&q=c&q=e&r=d&r=f")
+      hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=a&q=b&q=c&q=e&q=g&r=d&r=f&r=h")
     }
   }
 }

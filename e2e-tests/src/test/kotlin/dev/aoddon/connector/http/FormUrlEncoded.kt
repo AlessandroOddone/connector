@@ -5,8 +5,10 @@ import dev.aoddon.connector.util.assertHttpLogMatches
 import dev.aoddon.connector.util.hasRequestBody
 import dev.aoddon.connector.util.runHttpTest
 import io.ktor.http.ContentType
+import io.ktor.http.Headers
 import io.ktor.http.Parameters
 import io.ktor.http.Url
+import io.ktor.http.headersOf
 import io.ktor.http.parametersOf
 import io.ktor.http.withCharset
 import io.ktor.util.StringValues
@@ -77,6 +79,26 @@ private val BASE_URL = Url("https://formUrlEncoded/")
 
   @POST("post")
   @FormUrlEncoded
+  suspend fun formUrlEncodedParameters(@FieldMap parameters: Parameters)
+
+  @POST("post")
+  @FormUrlEncoded
+  suspend fun formUrlEncodedHeaders(@FieldMap headers: Headers)
+
+  @POST("post")
+  @FormUrlEncoded
+  suspend fun formUrlEncodedListOfPairsWithStringValues(@FieldMap entries: List<Pair<String, String>>)
+
+  @POST("post")
+  @FormUrlEncoded
+  suspend fun formUrlEncodedListOfPairsWithAnyValues(@FieldMap entries: List<Pair<String, Any>>)
+
+  @POST("post")
+  @FormUrlEncoded
+  suspend fun formUrlEncodedListOfPairsWithIterableValues(@FieldMap entries: List<Pair<String, Iterable<Any>>>)
+
+  @POST("post")
+  @FormUrlEncoded
   suspend fun formUrlEncodedMultipleParameters(
     @Field("f1") text1: String,
     @Field("f1") any1: Any,
@@ -92,7 +114,9 @@ private val BASE_URL = Url("https://formUrlEncoded/")
     @Field("f3") list: List<Any?>?,
     @FieldMap stringValues: StringValues?,
     @FieldMap map1: Map<String, List<String?>?>?,
-    @FieldMap map2: Map<String, Collection<Any?>?>?
+    @FieldMap map2: Map<String, Collection<Any?>?>?,
+    @FieldMap map3: List<Pair<String, Collection<String?>?>>?,
+    @FieldMap map4: List<Pair<String, Collection<Any?>?>>?
   )
 }
 
@@ -414,6 +438,165 @@ class FormUrlEncodedTest {
     )
   }
 
+  @Test fun `@FormUrlEncoded Parameters @FieldMap`() = runHttpTest {
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
+
+    service.formUrlEncodedParameters(Parameters.Empty)
+    service.formUrlEncodedParameters(
+      parametersOf(
+        "a" to listOf("1"),
+        "b" to listOf("2", "3")
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasUrl("https://formUrlEncoded/post")
+        hasRequestBody(
+          ByteArray(0),
+          ContentType.Application.FormUrlEncoded.withCharset(Charsets.UTF_8)
+        )
+      },
+      {
+        hasUrl("https://formUrlEncoded/post")
+        hasRequestBody(
+          "a=1&b=2&b=3",
+          ContentType.Application.FormUrlEncoded.withCharset(Charsets.UTF_8)
+        )
+      }
+    )
+  }
+
+  @Test fun `@FormUrlEncoded Headers @FieldMap`() = runHttpTest {
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
+
+    service.formUrlEncodedHeaders(Headers.Empty)
+    service.formUrlEncodedHeaders(
+      headersOf(
+        "a" to listOf("1"),
+        "b" to listOf("2", "3")
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasUrl("https://formUrlEncoded/post")
+        hasRequestBody(
+          ByteArray(0),
+          ContentType.Application.FormUrlEncoded.withCharset(Charsets.UTF_8)
+        )
+      },
+      {
+        hasUrl("https://formUrlEncoded/post")
+        hasRequestBody(
+          "a=1&b=2&b=3",
+          ContentType.Application.FormUrlEncoded.withCharset(Charsets.UTF_8)
+        )
+      }
+    )
+  }
+
+  @Test fun `@FormUrlEncoded key-value Pairs with String values @FieldMap`() = runHttpTest {
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
+
+    service.formUrlEncodedListOfPairsWithStringValues(emptyList())
+    service.formUrlEncodedListOfPairsWithStringValues(
+      listOf(
+        "a" to "1",
+        "b" to "2",
+        "b" to "3"
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasUrl("https://formUrlEncoded/post")
+        hasRequestBody(
+          ByteArray(0),
+          ContentType.Application.FormUrlEncoded.withCharset(Charsets.UTF_8)
+        )
+      },
+      {
+        hasUrl("https://formUrlEncoded/post")
+        hasRequestBody(
+          "a=1&b=2&b=3",
+          ContentType.Application.FormUrlEncoded.withCharset(Charsets.UTF_8)
+        )
+      }
+    )
+  }
+
+  @Test fun `@FormUrlEncoded key-value Pairs with Any values @FieldMap`() = runHttpTest {
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
+
+    service.formUrlEncodedListOfPairsWithAnyValues(emptyList())
+    service.formUrlEncodedListOfPairsWithAnyValues(
+      listOf(
+        "a" to object : Any() {
+          override fun toString() = "1"
+        },
+        "b" to object : Any() {
+          override fun toString() = "2"
+        },
+        "b" to object : Any() {
+          override fun toString() = "3"
+        }
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasUrl("https://formUrlEncoded/post")
+        hasRequestBody(
+          ByteArray(0),
+          ContentType.Application.FormUrlEncoded.withCharset(Charsets.UTF_8)
+        )
+      },
+      {
+        hasUrl("https://formUrlEncoded/post")
+        hasRequestBody(
+          "a=1&b=2&b=3",
+          ContentType.Application.FormUrlEncoded.withCharset(Charsets.UTF_8)
+        )
+      }
+    )
+  }
+
+  @Test fun `@FormUrlEncoded key-value Pairs with Iterable values @FieldMap`() = runHttpTest {
+    val service = FormUrlEncodedTestService(BASE_URL, httpClient)
+
+    service.formUrlEncodedListOfPairsWithIterableValues(emptyList())
+    service.formUrlEncodedListOfPairsWithIterableValues(
+      listOf(
+        "a" to listOf("1"),
+        "a" to emptyList(),
+        "b" to listOf("2", "3"),
+        "b" to listOf(
+          object : Any() {
+            override fun toString() = "4"
+          }
+        )
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasUrl("https://formUrlEncoded/post")
+        hasRequestBody(
+          ByteArray(0),
+          ContentType.Application.FormUrlEncoded.withCharset(Charsets.UTF_8)
+        )
+      },
+      {
+        hasUrl("https://formUrlEncoded/post")
+        hasRequestBody(
+          "a=1&b=2&b=3&b=4",
+          ContentType.Application.FormUrlEncoded.withCharset(Charsets.UTF_8)
+        )
+      }
+    )
+  }
+
   @Test fun `@FormUrlEncoded multiple parameters`() = runHttpTest {
     val service = FormUrlEncodedTestService(BASE_URL, httpClient)
 
@@ -431,14 +614,16 @@ class FormUrlEncodedTest {
   @Test fun `@FormUrlEncoded nullable parameters`() = runHttpTest {
     val service = FormUrlEncodedTestService(BASE_URL, httpClient)
 
-    service.formUrlEncodedNullableTypes(null, null, null, null, null, null)
+    service.formUrlEncodedNullableTypes(null, null, null, null, null, null, null, null)
     service.formUrlEncodedNullableTypes(
       "a",
       "b",
       listOf("c", "d"),
       parametersOf("f1" to listOf("e", "f")),
       mapOf("f2" to listOf("g")),
-      mapOf("f3" to setOf("h", "i"))
+      mapOf("f3" to setOf("h", "i")),
+      listOf("f4" to listOf("j")),
+      listOf("f5" to setOf("k", "l"))
     )
 
     assertHttpLogMatches(
@@ -452,7 +637,7 @@ class FormUrlEncodedTest {
       {
         hasUrl("https://formUrlEncoded/post")
         hasRequestBody(
-          "f1=a&f1=e&f1=f&f2=b&f2=g&f3=c&f3=d&f3=h&f3=i",
+          "f1=a&f1=e&f1=f&f2=b&f2=g&f3=c&f3=d&f3=h&f3=i&f4=j&f5=k&f5=l",
           ContentType.Application.FormUrlEncoded.withCharset(Charsets.UTF_8)
         )
       }
@@ -468,13 +653,15 @@ class FormUrlEncodedTest {
       listOf("a", null, "b"),
       null,
       mapOf("f2" to listOf(null, "c")),
-      mapOf("f3" to setOf("d", null))
+      mapOf("f3" to setOf("d", null)),
+      listOf("f4" to listOf(null)),
+      listOf("f5" to setOf("k", null))
     )
 
     assertHttpLogMatches {
       hasUrl("https://formUrlEncoded/post")
       hasRequestBody(
-        "f3=a&f3=b&f3=d&f2=c",
+        "f3=a&f3=b&f3=d&f2=c&f5=k",
         ContentType.Application.FormUrlEncoded.withCharset(Charsets.UTF_8)
       )
     }

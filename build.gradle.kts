@@ -111,7 +111,7 @@ signing {
 fun Project.isJvmOnly(): Boolean {
   return name.endsWith("codegen") ||
     name.endsWith("processor") ||
-    name.endsWith("integration-tests")
+    name == "e2e-tests"
 }
 
 fun Project.isInternal(): Boolean {
