@@ -11,8 +11,10 @@ import io.ktor.client.engine.mock.toByteArray
 import io.ktor.client.utils.EmptyContent
 import io.ktor.client.utils.buildHeaders
 import io.ktor.http.Headers
+import io.ktor.http.Parameters
 import io.ktor.http.Url
 import io.ktor.http.content.PartData
+import io.ktor.http.headersOf
 import io.ktor.http.parametersOf
 import io.ktor.util.StringValues
 import io.ktor.utils.io.core.ByteReadPacket
@@ -91,6 +93,14 @@ private const val JSON = "application/json"
   @POST("post")
   @Multipart
   suspend fun multipartFormStringValues(@PartMap(JSON) stringValues: StringValues)
+
+  @POST("post")
+  @Multipart
+  suspend fun multipartFormParameters(@PartMap(JSON) parameters: Parameters)
+
+  @POST("post")
+  @Multipart
+  suspend fun multipartFormHeaders(@PartMap(JSON) headers: Headers)
 
   @POST("post")
   @Multipart
@@ -612,6 +622,74 @@ class MultipartTest {
 
     service.multipartFormStringValues(
       parametersOf(
+        "key1" to listOf("a", "b"),
+        "key2" to listOf("c"),
+        "key3" to emptyList()
+      )
+    )
+
+    assertEquals(1, httpLog.size)
+    httpLog.last().assertHasMultipartContent(
+      subtype = "form-data",
+      parts = listOf(
+        TextPart(
+          formFieldName = "key1",
+          contentType = JSON,
+          content = "\"a\""
+        ),
+        TextPart(
+          formFieldName = "key1",
+          contentType = JSON,
+          content = "\"b\""
+        ),
+        TextPart(
+          formFieldName = "key2",
+          contentType = JSON,
+          content = "\"c\""
+        )
+      )
+    )
+  }
+
+  @Test fun `@PartMap Parameters`() = runHttpTest {
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+
+    service.multipartFormParameters(
+      parametersOf(
+        "key1" to listOf("a", "b"),
+        "key2" to listOf("c"),
+        "key3" to emptyList()
+      )
+    )
+
+    assertEquals(1, httpLog.size)
+    httpLog.last().assertHasMultipartContent(
+      subtype = "form-data",
+      parts = listOf(
+        TextPart(
+          formFieldName = "key1",
+          contentType = JSON,
+          content = "\"a\""
+        ),
+        TextPart(
+          formFieldName = "key1",
+          contentType = JSON,
+          content = "\"b\""
+        ),
+        TextPart(
+          formFieldName = "key2",
+          contentType = JSON,
+          content = "\"c\""
+        )
+      )
+    )
+  }
+
+  @Test fun `@PartMap Headers`() = runHttpTest {
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+
+    service.multipartFormHeaders(
+      headersOf(
         "key1" to listOf("a", "b"),
         "key2" to listOf("c"),
         "key3" to emptyList()
@@ -1974,7 +2052,7 @@ class MultipartTest {
   }
 }
 
-private fun HttpLogEntry.assertHasMultipartContent(
+internal fun HttpLogEntry.assertHasMultipartContent(
   subtype: String,
   parts: List<TextPart>
 ) {
@@ -2014,12 +2092,12 @@ private fun HttpLogEntry.assertHasMultipartContent(
   )
 }
 
-private data class TextPart(
+internal data class TextPart(
   val headers: List<String>,
   val content: String
 )
 
-private fun TextPart(
+internal fun TextPart(
   formFieldName: String?,
   contentType: String,
   content: String

@@ -112,6 +112,26 @@ private val BASE_URL = Url("https://headers/")
 
   @GET("get")
   @Headers("header:static")
+  suspend fun parameters(@HeaderMap parameters: Parameters)
+
+  @GET("get")
+  @Headers("header:static")
+  suspend fun ktorHeaders(@HeaderMap headers: io.ktor.http.Headers)
+
+  @POST("post")
+  @Headers("header:static")
+  suspend fun listOfPairsWithStringValues(@HeaderMap entries: List<Pair<String, String>>)
+
+  @POST("post")
+  @Headers("header:static")
+  suspend fun listOfPairsWithAnyValues(@HeaderMap entries: List<Pair<String, Any>>)
+
+  @POST("post")
+  @Headers("header:static")
+  suspend fun listOfPairsWithIterableValues(@HeaderMap entries: List<Pair<String, Iterable<Any>>>)
+
+  @GET("get")
+  @Headers("header:static")
   suspend fun iterableNullableTypes(
     @Header("header") h1: Iterable<String>?,
     @Header("header") h2: Collection<Any>?,
@@ -121,7 +141,9 @@ private val BASE_URL = Url("https://headers/")
     @Header("header") h6: Iterable<Any?>?,
     @HeaderMap stringValues: StringValues?,
     @HeaderMap map1: Map<String, List<String?>?>?,
-    @HeaderMap map2: Map<String, Collection<Any?>?>?
+    @HeaderMap map2: Map<String, Collection<Any?>?>?,
+    @HeaderMap map3: List<Pair<String, Collection<String?>?>>?,
+    @HeaderMap map4: List<Pair<String, Collection<Any?>?>>?
   )
 }
 
@@ -457,9 +479,11 @@ class HeadersTest {
       null,
       null,
       null,
+      null,
+      null,
       null
     )
-    // [static, d1, d2, d3, d4, d5, d6]
+    // [static, d1, d2, d3, d4, d5, d6, d7, d8]
     service.iterableNullableTypes(
       null,
       null,
@@ -468,8 +492,20 @@ class HeadersTest {
       listOf("d4", null, "d5"),
       setOf(null, "d6", null),
       null,
-      null,
-      null
+      mapOf(
+        "header" to null,
+      ),
+      mapOf(
+        "header" to null,
+      ),
+      listOf(
+        "header" to listOf("d7"),
+        "header" to null
+      ),
+      listOf(
+        "header" to null,
+        "header" to setOf("d8", null)
+      )
     )
 
     assertHttpLogMatches(
@@ -485,7 +521,7 @@ class HeadersTest {
       {
         hasRequestHeaders(
           headersOf(
-            "header" to listOf("static", "d1", "d2", "d3", "d4", "d5", "d6"),
+            "header" to listOf("static", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8"),
             "Accept-Charset" to listOf("UTF-8"),
             "Accept" to listOf("*/*")
           )
@@ -710,6 +746,190 @@ class HeadersTest {
     )
   }
 
+  @Test fun `Parameters @HeaderMap`() = runHttpTest {
+    val service = HeadersTestService(BASE_URL, httpClient)
+
+    service.parameters(Parameters.Empty)
+    service.parameters(
+      parametersOf(
+        "header" to listOf("1"),
+        "otherHeader" to listOf("2", "3")
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static", "1"),
+            "otherHeader" to listOf("2", "3"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      }
+    )
+  }
+
+  @Test fun `Ktor Headers @HeaderMap`() = runHttpTest {
+    val service = HeadersTestService(BASE_URL, httpClient)
+
+    service.ktorHeaders(io.ktor.http.Headers.Empty)
+    service.ktorHeaders(
+      headersOf(
+        "header" to listOf("1"),
+        "otherHeader" to listOf("2", "3")
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static", "1"),
+            "otherHeader" to listOf("2", "3"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      }
+    )
+  }
+
+  @Test fun `Key-value Pairs with String values @HeaderMap`() = runHttpTest {
+    val service = HeadersTestService(BASE_URL, httpClient)
+
+    service.listOfPairsWithStringValues(emptyList())
+    service.listOfPairsWithStringValues(
+      listOf(
+        "header" to "1",
+        "otherHeader" to "2",
+        "otherHeader" to "3"
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static", "1"),
+            "otherHeader" to listOf("2", "3"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      }
+    )
+  }
+
+  @Test fun `Key-value Pairs with Any values @HeaderMap`() = runHttpTest {
+    val service = HeadersTestService(BASE_URL, httpClient)
+
+    service.listOfPairsWithAnyValues(emptyList())
+    service.listOfPairsWithAnyValues(
+      listOf(
+        "header" to object : Any() {
+          override fun toString() = "1"
+        },
+        "otherHeader" to object : Any() {
+          override fun toString() = "2"
+        },
+        "otherHeader" to object : Any() {
+          override fun toString() = "3"
+        }
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static", "1"),
+            "otherHeader" to listOf("2", "3"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      }
+    )
+  }
+
+  @Test fun `Key-value Pairs with Iterable values @HeaderMap`() = runHttpTest {
+    val service = HeadersTestService(BASE_URL, httpClient)
+
+    service.listOfPairsWithIterableValues(emptyList())
+    service.listOfPairsWithIterableValues(
+      listOf(
+        "header" to listOf("1"),
+        "header" to emptyList(),
+        "otherHeader" to listOf("2", "3"),
+        "otherHeader" to listOf(
+          object : Any() {
+            override fun toString() = "4"
+          }
+        )
+      )
+    )
+
+    assertHttpLogMatches(
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      },
+      {
+        hasRequestHeaders(
+          headersOf(
+            "header" to listOf("static", "1"),
+            "otherHeader" to listOf("2", "3", "4"),
+            "Accept-Charset" to listOf("UTF-8"),
+            "Accept" to listOf("*/*")
+          )
+        )
+      }
+    )
+  }
+
   @Test fun `@HeaderMap iterable values with null items`() = runHttpTest {
     val service = HeadersTestService(BASE_URL, httpClient)
 
@@ -731,14 +951,24 @@ class HeadersTest {
       mapOf(
         "header" to listOf(null, "e", null),
         "otherHeader" to setOf("f", null)
+      ),
+      listOf(
+        "header" to null,
+        "otherHeader" to null,
+      ),
+      listOf(
+        "header" to null,
+        "header" to listOf(null, "g", null),
+        "otherHeader" to listOf("h", null),
+        "otherHeader" to null,
       )
     )
 
     assertHttpLogMatches {
       hasRequestHeaders(
         headersOf(
-          "header" to listOf("static", "a", "b", "c", "e"),
-          "otherHeader" to listOf("d", "f"),
+          "header" to listOf("static", "a", "b", "c", "e", "g"),
+          "otherHeader" to listOf("d", "f", "h"),
           "Accept-Charset" to listOf("UTF-8"),
           "Accept" to listOf("*/*")
         )

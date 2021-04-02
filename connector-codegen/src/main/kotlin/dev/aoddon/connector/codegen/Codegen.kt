@@ -24,9 +24,7 @@ import com.squareup.kotlinpoet.TypeVariableName
 import com.squareup.kotlinpoet.UNIT
 import com.squareup.kotlinpoet.asClassName
 import com.squareup.kotlinpoet.buildCodeBlock
-import dev.aoddon.connector.codegen.ServiceDescription.Companion.SUPPORTED_ITERABLE_TYPES
 import dev.aoddon.connector.codegen.util.classNameOrNull
-import dev.aoddon.connector.codegen.util.classNameOrThrow
 import dev.aoddon.connector.codegen.util.escape
 import dev.aoddon.connector.codegen.util.noBreakingSpaces
 import dev.aoddon.connector.codegen.util.nonNull
@@ -48,7 +46,6 @@ import io.ktor.http.ParametersBuilder
 import io.ktor.http.URLBuilder
 import io.ktor.http.URLProtocol
 import io.ktor.http.Url
-import io.ktor.util.StringValues
 import io.ktor.utils.io.ByteReadChannel
 import kotlinx.coroutines.CompletableJob
 import kotlinx.coroutines.Job
@@ -93,7 +90,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         ParameterNames.HTTP_BODY_SERIALIZERS,
         LIST.plusParameter(ClassNames.HTTP_BODY_SERIALIZER)
       )
-      .defaultValue("emptyList()")
+      .defaultValue("%M()", MemberName("kotlin.collections", "emptyList"))
       .build()
 
     val httpInterceptorsParameter = ParameterSpec
@@ -101,7 +98,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         ParameterNames.HTTP_INTERCEPTORS,
         LIST.plusParameter(ClassNames.HTTP_INTERCEPTOR)
       )
-      .defaultValue("emptyList()")
+      .defaultValue("%M()", MemberName("kotlin.collections", "emptyList"))
       .build()
 
     FunSpec.builder(name)
@@ -189,17 +186,17 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       .apply {
         functions.forEach { serviceFunction ->
           serviceFunction as ServiceDescription.Function.Http
-          addFunction(serviceFunction.toFunSpec(parentClassName = name))
+          addFunction(serviceFunction.toFunSpec())
         }
       }
       .build()
   }
 
-  private fun ServiceDescription.Function.Http.toFunSpec(parentClassName: String): FunSpec {
+  private fun ServiceDescription.Function.Http.toFunSpec(): FunSpec {
     return FunSpec.builder(name)
       .addModifiers(KModifier.OVERRIDE, KModifier.SUSPEND)
       .addParameters(parameters())
-      .addCode(body(parentClassName = parentClassName))
+      .addCode(body())
       .returns(returnType)
       .build()
   }
@@ -209,10 +206,15 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       ParameterSpec(name = parameterName, type = parameterType)
     }
 
-  private fun ServiceDescription.Function.Http.body(parentClassName: String): CodeBlock {
-    fun classProperty(name: String, isNestedThis: Boolean = false): String = when {
+  private fun ServiceDescription.Function.Http.body(): CodeBlock {
+    fun nestedThisProperty(name: String): String = when {
+      parameters.containsKey(name) -> "this.$name"
+      else -> name
+    }
+
+    fun serviceClassProperty(name: String, isNestedThis: Boolean = false): String = when {
       !parameters.containsKey(name) -> name
-      isNestedThis -> "this@$parentClassName.$name"
+      isNestedThis -> "this@$implementationClassName.$name"
       else -> "this.$name"
     }
 
@@ -230,7 +232,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           var surroundWithQuotes = false
           var didReplace = false
           var result = segment
-          url.parameterNamesByReplaceBlock.forEach { (toReplace, parameterName) ->
+          url.valueProviderParametersByReplaceBlock.forEach { (toReplace, parameterName) ->
             when {
               segment == toReplace -> {
                 if (!didReplace) {
@@ -270,7 +272,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         is ServiceDescription.Url.Template -> {
           val urlStringTemplate = url.value.let { urlTemplate ->
             var result = urlTemplate.escape().noBreakingSpaces()
-            url.parameterNamesByReplaceBlock.forEach { (toReplace, parameterName) ->
+            url.valueProviderParametersByReplaceBlock.forEach { (toReplace, parameterName) ->
               result = result.replace(toReplace, "\${$parameterName}")
             }
             result
@@ -282,10 +284,11 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
               addStatement(
                 "%M(%L)",
                 MemberName("io.ktor.http", "takeFrom"),
-                classProperty(ParameterNames.BASE_URL, isNestedThis = true),
+                serviceClassProperty(ParameterNames.BASE_URL, isNestedThis = true),
               )
               addStatement(
-                "encodedPath·= %L.%M()",
+                "%L·= %L.%M()",
+                nestedThisProperty("encodedPath"),
                 "\"$path\"",
                 MemberName("io.ktor.http", "encodeURLPath")
               )
@@ -303,7 +306,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
               addStatement(
                 "%M(\"%L:%L\")",
                 MemberName("io.ktor.http", "takeFrom"),
-                "\${${classProperty(ParameterNames.BASE_URL, isNestedThis = true)}.protocol.name}",
+                "\${${serviceClassProperty(ParameterNames.BASE_URL, isNestedThis = true)}.protocol.name}",
                 path,
               )
             }
@@ -312,10 +315,11 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
               addStatement(
                 "%M(%L)",
                 MemberName("io.ktor.http", "takeFrom"),
-                classProperty(ParameterNames.BASE_URL, isNestedThis = true),
+                serviceClassProperty(ParameterNames.BASE_URL, isNestedThis = true),
               )
               addStatement(
-                "encodedPath·+= %L.%M()",
+                "%L·+= %L.%M()",
+                nestedThisProperty("encodedPath"),
                 "\"$path\"",
                 MemberName("io.ktor.http", "encodeURLPath")
               )
@@ -343,30 +347,31 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
             }
 
             if (queryString?.isEmpty() == true) {
-              addStatement("trailingQuery = true")
+              addStatement("%L = true", nestedThisProperty("trailingQuery"))
             }
 
             if (queryString?.isNotEmpty() == true) {
               addStatement(
-                "parameters.appendAll(%M(%S))",
+                "%L.appendAll(%M(%S))",
+                nestedThisProperty("parameters"),
                 MemberName("io.ktor.http", "parseQueryString"),
                 queryString
               )
             }
 
             if (fragment?.isNotEmpty() == true) {
-              addStatement("fragment·= %L", "\"$fragment\"")
+              addStatement("%L·= %S", nestedThisProperty("fragment"), fragment)
             }
           }
         }
 
         is ServiceDescription.Url.Dynamic -> {
-          when (val typeName = parameters.getValue(url.parameterName)) {
+          when (val typeName = parameters.getValue(url.valueProviderParameter)) {
             ClassNames.Ktor.URL -> {
               addStatement(
                 "%M(%L)",
                 MemberName("io.ktor.http", "takeFrom"),
-                url.parameterName,
+                url.valueProviderParameter,
               )
             }
 
@@ -374,9 +379,9 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
               addStatement(
                 "%M(%L%L, %L)",
                 MemberName(packageName, FunctionNames.DYNAMIC_URL),
-                url.parameterName,
+                url.valueProviderParameter,
                 if (typeName != STRING) ".toString()" else "",
-                classProperty(ParameterNames.BASE_URL, isNestedThis = true)
+                serviceClassProperty(ParameterNames.BASE_URL, isNestedThis = true)
               )
             }
           }
@@ -384,68 +389,91 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       }
       url.dynamicQueryParameters.forEach { queryContent ->
         when (queryContent) {
-          is ServiceDescription.Url.QueryContent.Map -> {
-            add(
-              addMapToParameterBuilderCodeBlock(
-                mapParameterName = queryContent.parameterName,
-                mapTypeName = parameters.getValue(queryContent.parameterName),
-                parametersBuilderNameReference = "parameters"
-              )
-            )
-          }
-
-          is ServiceDescription.Url.QueryContent.Parameter -> {
-            val queryParameterTypeName = parameters.getValue(queryContent.parameterName)
+          is ServiceDescription.Url.QueryParameter.Single -> {
+            val queryParameterTypeName = parameters.getValue(queryContent.valueProviderParameter)
             if (queryParameterTypeName.isNullable) {
-              beginControlFlow("if (${queryContent.parameterName}·!= null)")
+              beginControlFlow("if (${queryContent.valueProviderParameter}·!= null)")
             }
 
-            val queryParameterTypeQualifiedName = queryParameterTypeName.classNameOrNull()?.canonicalName
-            when {
-              queryParameterTypeQualifiedName == "kotlin.String" -> {
-                addStatement("parameters.append(%S, ${queryContent.parameterName})", queryContent.key)
+            when (queryParameterTypeName.classNameOrNull()?.canonicalName) {
+              "kotlin.String" -> {
+                addStatement(
+                  "%L.append(%S, ${queryContent.valueProviderParameter})",
+                  nestedThisProperty("parameters"),
+                  queryContent.name
+                )
               }
-
-              SUPPORTED_ITERABLE_TYPES.any { it.canonicalName == queryParameterTypeQualifiedName } -> {
-                queryParameterTypeName as ParameterizedTypeName
-                val iterableTypeArgumentName = queryParameterTypeName.typeArguments[0]
-                when {
-                  iterableTypeArgumentName.classNameOrNull()?.canonicalName != "kotlin.String" -> {
-                    addStatement(
-                      "parameters.appendAll(%S, ${queryContent.parameterName}.%M { it%L.toString() })",
-                      queryContent.key,
-                      MemberName(
-                        "kotlin.collections",
-                        if (iterableTypeArgumentName.isNullable) "mapNotNull" else "map"
-                      ),
-                      if (iterableTypeArgumentName.isNullable) "?" else ""
-                    )
-                  }
-
-                  // Iterable<String?>
-                  iterableTypeArgumentName.isNullable -> {
-                    addStatement(
-                      "parameters.appendAll(%S, ${queryContent.parameterName}.%M())",
-                      queryContent.key,
-                      MemberName("kotlin.collections", "filterNotNull")
-                    )
-                  }
-
-                  // Iterable<String>
-                  else -> {
-                    addStatement("parameters.appendAll(%S, ${queryContent.parameterName})", queryContent.key)
-                  }
-                }
-              }
-
               else -> {
-                addStatement("parameters.append(%S, ${queryContent.parameterName}.toString())", queryContent.key)
+                addStatement(
+                  "%L.append(%S, ${queryContent.valueProviderParameter}.toString())",
+                  nestedThisProperty("parameters"),
+                  queryContent.name
+                )
               }
             }
 
             if (queryParameterTypeName.isNullable) {
               endControlFlow()
             }
+          }
+
+          is ServiceDescription.Url.QueryParameter.Iterable -> {
+            val queryParameterTypeName = parameters.getValue(queryContent.valueProviderParameter)
+            queryParameterTypeName as ParameterizedTypeName
+
+            if (queryParameterTypeName.isNullable) {
+              beginControlFlow("if (${queryContent.valueProviderParameter}·!= null)")
+            }
+
+            val iterableTypeArgumentName = queryParameterTypeName.typeArguments[0]
+            when {
+              iterableTypeArgumentName.classNameOrNull()?.canonicalName != "kotlin.String" -> {
+                addStatement(
+                  "%L.appendAll(%S, ${queryContent.valueProviderParameter}.%M { it%L.toString() })",
+                  nestedThisProperty("parameters"),
+                  queryContent.name,
+                  MemberName(
+                    "kotlin.collections",
+                    if (iterableTypeArgumentName.isNullable) "mapNotNull" else "map"
+                  ),
+                  if (iterableTypeArgumentName.isNullable) "?" else ""
+                )
+              }
+
+              // Iterable<String?>
+              iterableTypeArgumentName.isNullable -> {
+                addStatement(
+                  "%L.appendAll(%S, ${queryContent.valueProviderParameter}.%M())",
+                  nestedThisProperty("parameters"),
+                  queryContent.name,
+                  MemberName("kotlin.collections", "filterNotNull")
+                )
+              }
+
+              // Iterable<String>
+              else -> {
+                addStatement(
+                  "%L.appendAll(%S, ${queryContent.valueProviderParameter})",
+                  nestedThisProperty("parameters"),
+                  queryContent.name
+                )
+              }
+            }
+
+            if (queryParameterTypeName.isNullable) {
+              endControlFlow()
+            }
+          }
+
+          is ServiceDescription.Url.QueryParameter.Map -> {
+            add(
+              addMapToParameterBuilderCodeBlock(
+                parameterName = queryContent.valueProviderParameter,
+                typeName = parameters.getValue(queryContent.valueProviderParameter),
+                mapType = queryContent.type,
+                parametersBuilderNameReference = nestedThisProperty("parameters")
+              )
+            )
           }
         }
       }
@@ -463,71 +491,80 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       )
       headers.forEach { headerContent ->
         when (headerContent) {
-          is ServiceDescription.Function.Http.HeaderContent.Static -> {
+          is ServiceDescription.Function.Http.Header.SingleStatic -> {
             addStatement("append(%S, %S)", headerContent.name, headerContent.value)
           }
 
-          is ServiceDescription.Function.Http.HeaderContent.Map -> {
-            add(
-              addMapToParameterBuilderCodeBlock(
-                mapParameterName = headerContent.parameterName,
-                mapTypeName = parameters.getValue(headerContent.parameterName)
-              )
-            )
-          }
+          is ServiceDescription.Function.Http.Header.SingleDynamic -> {
+            val headerTypeName = parameters.getValue(headerContent.valueProviderParameter)
 
-          is ServiceDescription.Function.Http.HeaderContent.Parameter -> {
-            val headerTypeName = parameters.getValue(headerContent.parameterName)
             if (headerTypeName.isNullable) {
-              beginControlFlow("if (${headerContent.parameterName}·!= null)")
+              beginControlFlow("if (${headerContent.valueProviderParameter}·!= null)")
             }
 
-            val headerTypeQualifiedName = headerTypeName.classNameOrNull()?.canonicalName
-            when {
-              headerTypeQualifiedName == "kotlin.String" -> {
-                addStatement("append(%S, ${headerContent.parameterName})", headerContent.headerName)
+            when (headerTypeName.classNameOrNull()?.canonicalName) {
+              "kotlin.String" -> {
+                addStatement("append(%S, ${headerContent.valueProviderParameter})", headerContent.name)
               }
-
-              SUPPORTED_ITERABLE_TYPES.any { it.canonicalName == headerTypeQualifiedName } -> {
-                headerTypeName as ParameterizedTypeName
-                val iterableTypeArgumentName = headerTypeName.typeArguments[0]
-                when {
-                  iterableTypeArgumentName.classNameOrNull()?.canonicalName != "kotlin.String" -> {
-                    addStatement(
-                      "appendAll(%S, ${headerContent.parameterName}.%M { it%L.toString() })",
-                      headerContent.headerName,
-                      MemberName(
-                        "kotlin.collections",
-                        if (iterableTypeArgumentName.isNullable) "mapNotNull" else "map"
-                      ),
-                      if (iterableTypeArgumentName.isNullable) "?" else ""
-                    )
-                  }
-
-                  // Iterable<String?>
-                  iterableTypeArgumentName.isNullable -> {
-                    addStatement(
-                      "appendAll(%S, ${headerContent.parameterName}.%M())",
-                      headerContent.headerName,
-                      MemberName("kotlin.collections", "filterNotNull")
-                    )
-                  }
-
-                  // Iterable<String>
-                  else -> {
-                    addStatement("appendAll(%S, ${headerContent.parameterName})", headerContent.headerName)
-                  }
-                }
-              }
-
               else -> {
-                addStatement("append(%S, ${headerContent.parameterName}.toString())", headerContent.headerName)
+                addStatement("append(%S, ${headerContent.valueProviderParameter}.toString())", headerContent.name)
               }
             }
 
             if (headerTypeName.isNullable) {
               endControlFlow()
             }
+          }
+
+          is ServiceDescription.Function.Http.Header.DynamicIterable -> {
+            val headerTypeName = parameters.getValue(headerContent.valueProviderParameter) as ParameterizedTypeName
+
+            if (headerTypeName.isNullable) {
+              beginControlFlow("if (${headerContent.valueProviderParameter}·!= null)")
+            }
+
+            val iterableTypeArgumentName = headerTypeName.typeArguments[0]
+            when {
+              iterableTypeArgumentName.classNameOrNull()?.canonicalName != "kotlin.String" -> {
+                addStatement(
+                  "appendAll(%S, ${headerContent.valueProviderParameter}.%M { it%L.toString() })",
+                  headerContent.name,
+                  MemberName(
+                    "kotlin.collections",
+                    if (iterableTypeArgumentName.isNullable) "mapNotNull" else "map"
+                  ),
+                  if (iterableTypeArgumentName.isNullable) "?" else ""
+                )
+              }
+
+              // Iterable<String?>
+              iterableTypeArgumentName.isNullable -> {
+                addStatement(
+                  "appendAll(%S, ${headerContent.valueProviderParameter}.%M())",
+                  headerContent.name,
+                  MemberName("kotlin.collections", "filterNotNull")
+                )
+              }
+
+              // Iterable<String>
+              else -> {
+                addStatement("appendAll(%S, ${headerContent.valueProviderParameter})", headerContent.name)
+              }
+            }
+
+            if (headerTypeName.isNullable) {
+              endControlFlow()
+            }
+          }
+
+          is ServiceDescription.Function.Http.Header.DynamicMap -> {
+            add(
+              addMapToParameterBuilderCodeBlock(
+                parameterName = headerContent.valueProviderParameter,
+                typeName = parameters.getValue(headerContent.valueProviderParameter),
+                mapType = headerContent.type
+              )
+            )
           }
         }
       }
@@ -575,15 +612,15 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
 
     fun requestBodyVariable(variableName: String) = buildCodeBlock {
       content as ServiceDescription.HttpContent.Body
-      beginControlFlow("val·$variableName·by·lazy")
+      beginControlFlow("val·$variableName·by·%M", MemberName("kotlin", "lazy"))
 
-      val typeName = parameters.getValue(content.parameterName)
+      val typeName = parameters.getValue(content.valueProviderParameter)
       val className = typeName.classNameOrNull()
       val isHttpBodyClass = className?.nonNull() == ClassNames.HTTP_BODY
       val isOptional = isHttpBodyClass && typeName.isNullable
 
       if (isOptional) {
-        beginControlFlow("${content.parameterName}?.let")
+        beginControlFlow("${content.valueProviderParameter}?.%M", MemberName("kotlin", "let"))
       }
 
       val contentTypeVariableName = variableName("contentType")
@@ -596,7 +633,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
 
       add(
         "%L.%M($contentTypeVariableName).write(\n",
-        classProperty(ParameterNames.HTTP_BODY_SERIALIZERS, isNestedThis = true),
+        serviceClassProperty(ParameterNames.HTTP_BODY_SERIALIZERS, isNestedThis = true),
         MemberName(packageName, FunctionNames.FIRST_WRITER_OF)
       )
       indent()
@@ -612,9 +649,9 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       add(",\n")
       add(
         if (isHttpBodyClass) {
-          "${content.parameterName}.value"
+          "${content.valueProviderParameter}.value"
         } else {
-          content.parameterName
+          content.valueProviderParameter
         }
       )
       add(",\n")
@@ -632,20 +669,20 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
 
     fun multipartRequestBodyVariable(variableName: String) = buildCodeBlock {
       content as ServiceDescription.HttpContent.Multipart
-      beginControlFlow("val·$variableName·by·lazy")
+      beginControlFlow("val·$variableName·by·%M", MemberName("kotlin", "lazy"))
       beginControlFlow(
         "%M",
         MemberName("dev.aoddon.connector.http.multipart", "MultipartOutgoingContent")
       )
 
-      addStatement("subtype = %S", content.subtype)
+      addStatement("%L·= %S", nestedThisProperty("subtype"), content.subtype)
 
       fun appendRawPart(
         referenceLiteral: String,
         typeName: TypeName
       ) = buildCodeBlock {
         if (typeName.isNullable) {
-          beginControlFlow("$referenceLiteral?.let")
+          beginControlFlow("$referenceLiteral?.%M", MemberName("kotlin", "let"))
         }
         addStatement("appendPart(%L)", referenceLiteral)
         if (typeName.isNullable) {
@@ -665,9 +702,9 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         val isOptional = isHttpBodyClass && typeName.isNullable
 
         if (isOptional) {
-          beginControlFlow("$referenceLiteral?.let")
+          beginControlFlow("$referenceLiteral?.%M", MemberName("kotlin", "let"))
         } else if (!isIsolatedBlock) {
-          beginControlFlow("$referenceLiteral.let")
+          beginControlFlow("$referenceLiteral.%M", MemberName("kotlin", "let"))
         }
 
         val contentTypeVariableName = variableName("contentType")
@@ -682,7 +719,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         }
         add(
           "%L.%M(%L).write(\n",
-          classProperty(ParameterNames.HTTP_BODY_SERIALIZERS, isNestedThis = true),
+          serviceClassProperty(ParameterNames.HTTP_BODY_SERIALIZERS, isNestedThis = true),
           MemberName(packageName, FunctionNames.FIRST_WRITER_OF),
           contentTypeVariableName
         )
@@ -719,15 +756,15 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
 
       content.parts.forEach { partContent ->
         when (partContent) {
-          is ServiceDescription.HttpContent.Multipart.PartContent.Parameter -> {
-            val typeName = parameters.getValue(partContent.parameterName)
+          is ServiceDescription.HttpContent.Multipart.PartContent.Single -> {
+            val typeName = parameters.getValue(partContent.valueProviderParameter)
             // null metadata encodes raw parts
             if (partContent.metadata == null) {
-              add(appendRawPart(referenceLiteral = partContent.parameterName, typeName = typeName))
+              add(appendRawPart(referenceLiteral = partContent.valueProviderParameter, typeName = typeName))
             } else {
               add(
                 appendPart(
-                  referenceLiteral = partContent.parameterName,
+                  referenceLiteral = partContent.valueProviderParameter,
                   typeName = typeName,
                   contentType = partContent.metadata.contentType,
                   formFieldNameLiteral = partContent.metadata.formFieldName?.let { "\"$it\"" }
@@ -737,12 +774,13 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           }
 
           is ServiceDescription.HttpContent.Multipart.PartContent.Iterable -> {
-            val iterableTypeName = parameters.getValue(partContent.parameterName)
+            val iterableTypeName = parameters.getValue(partContent.valueProviderParameter)
             val partTypeName = (iterableTypeName as ParameterizedTypeName).typeArguments.first()
             beginControlFlow(
-              "%L%L.forEach",
-              partContent.parameterName,
-              if (iterableTypeName.isNullable) "?" else ""
+              "%L%L.%M",
+              partContent.valueProviderParameter,
+              if (iterableTypeName.isNullable) "?" else "",
+              MemberName("kotlin.collections", "forEach")
             )
             // null metadata encodes raw parts
             if (partContent.metadata == null) {
@@ -762,34 +800,38 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           }
 
           is ServiceDescription.HttpContent.Multipart.PartContent.Map -> {
-            val mapTypeName = parameters.getValue(partContent.parameterName)
-            val mapClassNameNonNull = mapTypeName.classNameOrThrow().nonNull()
-            val partTypeName = if (mapClassNameNonNull == ClassNames.Ktor.STRING_VALUES) STRING else {
-              mapTypeName as? ParameterizedTypeName ?: error("Unexpected type: $mapTypeName")
-              if (mapTypeName.rawType.canonicalName == "kotlin.collections.Map") {
+            val mapTypeName = parameters.getValue(partContent.valueProviderParameter)
+            val partTypeName = when (partContent.type) {
+              ServiceDescription.MapType.KtorStringValues -> STRING
+              is ServiceDescription.MapType.Map -> {
                 // Map<String, T>
+                (mapTypeName as? ParameterizedTypeName) ?: error("Unexpected Map type: $mapTypeName")
                 mapTypeName.typeArguments.last()
-              } else {
+              }
+              is ServiceDescription.MapType.IterableKeyValuePairs -> {
                 // Iterable<Pair<String, T>>
-                check(SUPPORTED_ITERABLE_TYPES.contains(mapClassNameNonNull)) { "Unexpected type: $mapTypeName" }
+                (mapTypeName as? ParameterizedTypeName) ?: error("Unexpected Iterable type: $mapTypeName")
                 val pairTypeName = mapTypeName.typeArguments.first()
-                check(pairTypeName is ParameterizedTypeName && pairTypeName.rawType.canonicalName == "kotlin.Pair") {
-                  "Unexpected type: $mapTypeName"
+                check(
+                  pairTypeName is ParameterizedTypeName &&
+                    pairTypeName.rawType.canonicalName == "kotlin.Pair"
+                ) {
+                  "Unexpected key-value pair type: $mapTypeName"
                 }
                 pairTypeName.typeArguments.last()
               }
             }
             beginControlFlow(
-              "%L%L.%L { %Lname, value%L ->",
-              partContent.parameterName,
+              "%L%L.%M { %Lname, value%L ->",
+              partContent.valueProviderParameter,
               if (mapTypeName.isNullable) "?" else "",
-              if (mapClassNameNonNull == ClassNames.Ktor.STRING_VALUES) {
-                buildCodeBlock { add("%M", MemberName("io.ktor.util", "flattenForEach")) }
+              if (partContent.type == ServiceDescription.MapType.KtorStringValues) {
+                MemberName("io.ktor.util", "flattenForEach")
               } else {
-                "forEach"
+                MemberName("kotlin.collections", "forEach")
               },
-              if (mapClassNameNonNull != ClassNames.Ktor.STRING_VALUES) "(" else "",
-              if (mapClassNameNonNull != ClassNames.Ktor.STRING_VALUES) ")" else "",
+              if (partContent.type != ServiceDescription.MapType.KtorStringValues) "(" else "",
+              if (partContent.type != ServiceDescription.MapType.KtorStringValues) ")" else "",
             )
             add(
               appendPart(
@@ -812,74 +854,83 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
     fun formUrlEncodedParametersBuilderVariable(variableName: String) = buildCodeBlock {
       content as ServiceDescription.HttpContent.FormUrlEncoded
       beginControlFlow(
-        "val·$variableName·=·%T().apply",
-        ClassNames.Ktor.PARAMETERS_BUILDER
+        "val·$variableName·=·%T().%M",
+        ClassNames.Ktor.PARAMETERS_BUILDER,
+        MemberName("kotlin", "apply")
       )
 
       content.fields.forEach { fieldContent ->
         when (fieldContent) {
-          is ServiceDescription.HttpContent.FormUrlEncoded.FieldContent.Map -> {
-            add(
-              addMapToParameterBuilderCodeBlock(
-                mapParameterName = fieldContent.parameterName,
-                mapTypeName = parameters.getValue(fieldContent.parameterName)
-              )
-            )
-          }
-
-          is ServiceDescription.HttpContent.FormUrlEncoded.FieldContent.Parameter -> {
-            val fieldTypeName = parameters.getValue(fieldContent.parameterName)
+          is ServiceDescription.HttpContent.FormUrlEncoded.FieldContent.Single -> {
+            val fieldTypeName = parameters.getValue(fieldContent.valueProviderParameter)
 
             if (fieldTypeName.isNullable) {
-              beginControlFlow("if (${fieldContent.parameterName}·!= null)")
+              beginControlFlow("if (${fieldContent.valueProviderParameter}·!= null)")
             }
 
-            val fieldTypeQualifiedName = fieldTypeName.classNameOrNull()?.canonicalName
-            when {
-              fieldTypeQualifiedName == "kotlin.String" -> {
-                addStatement("append(%S, ${fieldContent.parameterName})", fieldContent.fieldName)
+            when (fieldTypeName.classNameOrNull()?.canonicalName) {
+              "kotlin.String" -> {
+                addStatement("append(%S, ${fieldContent.valueProviderParameter})", fieldContent.name)
               }
-
-              SUPPORTED_ITERABLE_TYPES.any { it.canonicalName == fieldTypeQualifiedName } -> {
-                fieldTypeName as ParameterizedTypeName
-                val iterableTypeArgumentName = fieldTypeName.typeArguments[0]
-                val iterableTypeArgumentQualifiedName = iterableTypeArgumentName.classNameOrNull()?.canonicalName
-                when {
-                  iterableTypeArgumentQualifiedName != "kotlin.String" -> {
-                    addStatement(
-                      "appendAll(%S, ${fieldContent.parameterName}.%M { it%L.toString() })",
-                      fieldContent.fieldName,
-                      MemberName(
-                        "kotlin.collections",
-                        if (iterableTypeArgumentName.isNullable) "mapNotNull" else "map"
-                      ),
-                      if (iterableTypeArgumentName.isNullable) "?" else ""
-                    )
-                  }
-
-                  // Iterable<String?>
-                  iterableTypeArgumentName.isNullable -> {
-                    addStatement(
-                      "appendAll(%S, ${fieldContent.parameterName}.%M())",
-                      MemberName("kotlin.collections", "filterNotNull")
-                    )
-                  }
-
-                  // Iterable<String>
-                  else -> {
-                    addStatement("appendAll(%S, ${fieldContent.parameterName})", fieldContent.fieldName)
-                  }
-                }
-              }
-
               else -> {
-                addStatement("append(%S, ${fieldContent.parameterName}.toString())", fieldContent.fieldName)
+                addStatement("append(%S, ${fieldContent.valueProviderParameter}.toString())", fieldContent.name)
               }
             }
 
             if (fieldTypeName.isNullable) {
               endControlFlow()
             }
+          }
+
+          is ServiceDescription.HttpContent.FormUrlEncoded.FieldContent.Iterable -> {
+            val fieldTypeName = parameters.getValue(fieldContent.valueProviderParameter) as ParameterizedTypeName
+
+            if (fieldTypeName.isNullable) {
+              beginControlFlow("if (${fieldContent.valueProviderParameter}·!= null)")
+            }
+
+            val iterableTypeArgumentName = fieldTypeName.typeArguments[0]
+            val iterableTypeArgumentQualifiedName = iterableTypeArgumentName.classNameOrNull()?.canonicalName
+            when {
+              iterableTypeArgumentQualifiedName != "kotlin.String" -> {
+                addStatement(
+                  "appendAll(%S, ${fieldContent.valueProviderParameter}.%M { it%L.toString() })",
+                  fieldContent.name,
+                  MemberName(
+                    "kotlin.collections",
+                    if (iterableTypeArgumentName.isNullable) "mapNotNull" else "map"
+                  ),
+                  if (iterableTypeArgumentName.isNullable) "?" else ""
+                )
+              }
+
+              // Iterable<String?>
+              iterableTypeArgumentName.isNullable -> {
+                addStatement(
+                  "appendAll(%S, ${fieldContent.valueProviderParameter}.%M())",
+                  MemberName("kotlin.collections", "filterNotNull")
+                )
+              }
+
+              // Iterable<String>
+              else -> {
+                addStatement("appendAll(%S, ${fieldContent.valueProviderParameter})", fieldContent.name)
+              }
+            }
+
+            if (fieldTypeName.isNullable) {
+              endControlFlow()
+            }
+          }
+
+          is ServiceDescription.HttpContent.FormUrlEncoded.FieldContent.Map -> {
+            add(
+              addMapToParameterBuilderCodeBlock(
+                parameterName = fieldContent.valueProviderParameter,
+                typeName = parameters.getValue(fieldContent.valueProviderParameter),
+                mapType = fieldContent.type
+              )
+            )
           }
         }
       }
@@ -930,27 +981,27 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
     }
 
     fun rawResultMapper(resultVariableName: String) = buildCodeBlock rawResultMapperBlock@{
-      if (streamingLambdaParameterName != null) {
-        val streamingLambdaType = parameters.getValue(streamingLambdaParameterName) as LambdaTypeName
+      if (streamingLambdaProviderParameter != null) {
+        val streamingLambdaType = parameters.getValue(streamingLambdaProviderParameter) as LambdaTypeName
         when (streamingLambdaType.parameters.single().type.classNameOrNull()) {
           ClassNames.HTTP_RESULT -> {
-            addStatement("$streamingLambdaParameterName($resultVariableName)")
+            addStatement("$streamingLambdaProviderParameter($resultVariableName)")
           }
           ClassNames.HTTP_RESPONSE -> {
             addStatement(
-              "$streamingLambdaParameterName($resultVariableName.%M())",
+              "$streamingLambdaProviderParameter($resultVariableName.%M())",
               MemberName("dev.aoddon.connector.http", "responseOrThrow")
             )
           }
           ClassNames.HTTP_RESPONSE_SUCCESS -> {
             addStatement(
-              "$streamingLambdaParameterName($resultVariableName.%M())",
+              "$streamingLambdaProviderParameter($resultVariableName.%M())",
               MemberName("dev.aoddon.connector.http", "successOrThrow")
             )
           }
           ClassNames.Ktor.BYTE_READ_CHANNEL -> {
             addStatement(
-              "$streamingLambdaParameterName($resultVariableName.%M())",
+              "$streamingLambdaProviderParameter($resultVariableName.%M())",
               MemberName("dev.aoddon.connector.http", "successBodyOrThrow")
             )
           }
@@ -1050,7 +1101,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
             }
             else -> ""
           },
-          classProperty(ParameterNames.HTTP_BODY_SERIALIZERS, isNestedThis = true),
+          serviceClassProperty(ParameterNames.HTTP_BODY_SERIALIZERS, isNestedThis = true),
           MemberName(packageName, FunctionNames.FIRST_READER_OF),
           contentTypeVariableName
         )
@@ -1187,7 +1238,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       val bodySupplierExpression = when {
         requestBodyVariableName != null -> buildCodeBlock {
           content as ServiceDescription.HttpContent.Body
-          val typeName = parameters.getValue(content.parameterName)
+          val typeName = parameters.getValue(content.valueProviderParameter)
           val className = typeName.classNameOrNull()
           val isHttpBodyClass = className?.nonNull() == ClassNames.HTTP_BODY
           val isOptional = isHttpBodyClass && typeName.isNullable
@@ -1230,8 +1281,8 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       beginControlFlow(
         "return $requestVariableName.%M(%L, %L) { $resultVariableName ->",
         MemberName(packageName, FunctionNames.EXECUTE),
-        classProperty(ParameterNames.HTTP_CLIENT),
-        classProperty(ParameterNames.HTTP_INTERCEPTORS),
+        serviceClassProperty(ParameterNames.HTTP_CLIENT),
+        serviceClassProperty(ParameterNames.HTTP_INTERCEPTORS),
       )
 
       add(rawResultMapper(resultVariableName = resultVariableName))
@@ -1296,7 +1347,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
                   dispose = {
                     val job = coroutineContext[%T] as %T
                     job.complete()
-                    runCatching { content.cancel(null) }
+                    %M { content.cancel(null) }
                     job.join()
                   }
                   when (status.value) {
@@ -1338,6 +1389,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         ClassNames.Ktor.HTTP_CLIENT_CALL,
         ClassNames.JOB,
         ClassNames.COMPLETABLE_JOB,
+        MemberName("kotlin", "runCatching"),
         MemberName("dev.aoddon.connector.http", "success"),
         MemberName("dev.aoddon.connector.http", "responseError"),
         MemberName("io.ktor.utils.io", "readRemaining"),
@@ -1356,7 +1408,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       .returns(ClassNames.Ktor.HTTP_REQUEST_BUILDER)
       .addCode(
         """
-        return·%T().apply·{
+        return·%T().%M·{
           method·=·this@${FunctionNames.TO_HTTP_REQUEST_BUILDER}.method
           url.%M(this@${FunctionNames.TO_HTTP_REQUEST_BUILDER}.url)
           headers.appendAll(this@${FunctionNames.TO_HTTP_REQUEST_BUILDER}.headers)
@@ -1365,6 +1417,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         }
         """.trimIndent(),
         ClassNames.Ktor.HTTP_REQUEST_BUILDER,
+        MemberName("kotlin", "apply"),
         MemberName("io.ktor.http", "takeFrom"),
         MemberName("io.ktor.client.features", "expectSuccess")
       )
@@ -1386,7 +1439,11 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       .returns(ClassNames.HTTP_BODY_SERIALIZER)
       .addCode(
         buildCodeBlock {
-          add("return·find·{·it.canWrite($contentTypeParameterName)·}·?:·error(\n")
+          add(
+            "return·%M·{·it.canWrite($contentTypeParameterName)·}·?:·%M(\n",
+            MemberName("kotlin.collections", "find"),
+            MemberName("kotlin", "error")
+          )
           indent()
           add(
             "\"No·suitable·%L·found·for·writing·Content-Type:·'$$contentTypeParameterName'\"\n",
@@ -1414,7 +1471,11 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       .returns(ClassNames.HTTP_BODY_SERIALIZER)
       .addCode(
         buildCodeBlock {
-          add("return·find·{·it.canRead($contentTypeParameterName)·}·?:·error(\n")
+          add(
+            "return·%M·{·it.canRead($contentTypeParameterName)·}·?:·%M(\n",
+            MemberName("kotlin.collections", "find"),
+            MemberName("kotlin", "error")
+          )
           indent()
           add(
             "\"No·suitable·%L·found·for·reading·Content-Type:·'$$contentTypeParameterName'\"\n",
@@ -1435,7 +1496,8 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       .addCode(
         buildCodeBlock {
           beginControlFlow(
-            "require(protocol·== %T.HTTP || protocol·== %T.HTTPS)",
+            "%M(protocol·== %T.HTTP || protocol·== %T.HTTPS)",
+            MemberName("kotlin", "require"),
             URLProtocol::class,
             URLProtocol::class
           )
@@ -1445,14 +1507,18 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           )
           endControlFlow()
 
-          beginControlFlow("require(parameters.isEmpty())")
+          beginControlFlow("%M(parameters.isEmpty())", MemberName("kotlin", "require"))
           addStatement(
             "%L",
             "\"Base·URL·should·not·have·query·parameters.·Found:·\$this\""
           )
           endControlFlow()
 
-          beginControlFlow("require(fragment.isEmpty())")
+          beginControlFlow(
+            "%M(fragment.%M())",
+            MemberName("kotlin", "require"),
+            MemberName("kotlin.text", "isEmpty")
+          )
           addStatement(
             "%L",
             "\"Base·URL·fragment·should·be·empty.·Found:·\$this\""
@@ -1460,8 +1526,10 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           endControlFlow()
 
           beginControlFlow(
-            "require(%M.endsWith(%L))",
+            "%M(%M.%M(%L))",
+            MemberName("kotlin", "require"),
             MemberName("io.ktor.http", "fullPath"),
+            MemberName("kotlin.text", "endsWith"),
             "'/'"
           )
           addStatement(
@@ -1485,15 +1553,17 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       .addCode(
         buildCodeBlock {
           addStatement(
-            "val·path·= %L.takeWhile·{ it·!=·'?'·&& it·!=·'#' }",
+            "val·path·= %L.%M·{ it·!=·'?'·&& it·!=·'#' }",
             ParameterNames.DYNAMIC_URL,
+            MemberName("kotlin.text", "takeWhile")
           )
 
           beginControlFlow("when")
 
           // Protocol-relative
           beginControlFlow(
-            "path.startsWith(%S) ->",
+            "path.%M(%S) ->",
+            MemberName("kotlin.text", "startsWith"),
             "//",
           )
           addStatement(
@@ -1506,7 +1576,8 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
 
           // Absolute
           beginControlFlow(
-            "path.startsWith(%S) ->",
+            "path.%M(%S) ->",
+            MemberName("kotlin.text", "startsWith"),
             "/",
           )
           addStatement(
@@ -1544,33 +1615,42 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           endControlFlow()
 
           beginControlFlow("if (${ParameterNames.DYNAMIC_URL}.length > path.length)")
-          addStatement("val·afterPath·= ${ParameterNames.DYNAMIC_URL}.substring(path.length)")
+          addStatement(
+            "val·afterPath·= ${ParameterNames.DYNAMIC_URL}.%M(path.length)",
+            MemberName("kotlin.text", "substring")
+          )
           add(
             """
             // 'null' if there is no '?'
             val queryString: String? = if (afterPath[0] == '?') {
-              afterPath.drop(1).takeWhile { it != '#' }
+              afterPath.%M(1).%M { it != '#' }
             } else {
               null
             }
-            if (queryString?.isEmpty() == true) {
+            if (queryString?.%M() == true) {
               trailingQuery = true
             }
-            if (queryString?.isNotEmpty() == true) {
+            if (queryString?.%M() == true) {
               parameters.appendAll(%M(queryString))
             }
             """.trimIndent(),
+            MemberName("kotlin.text", "drop"),
+            MemberName("kotlin.text", "takeWhile"),
+            MemberName("kotlin.text", "isEmpty"),
+            MemberName("kotlin.text", "isNotEmpty"),
             MemberName("io.ktor.http", "parseQueryString"),
           )
           add("\n")
           add(
             """
             fragment = if (afterPath[0] == '#') {
-              afterPath.drop(1)
+              afterPath.%M(1)
             } else {
-              afterPath.substringAfter("#", missingDelimiterValue = "")
+              afterPath.%M("#", missingDelimiterValue = "")
             }
-            """.trimIndent()
+            """.trimIndent(),
+            MemberName("kotlin.text", "drop"),
+            MemberName("kotlin.text", "substringAfter")
           )
           add("\n")
           endControlFlow()
@@ -1611,7 +1691,9 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       buildCodeBlock {
         addStatement("if (this·==·null) return")
         beginControlFlow(
-          "require(toString().split('/').none·{ it.%M() })",
+          "require(toString().%M('/').%M·{ it.%M() })",
+          MemberName("kotlin.text", "split"),
+          MemberName("kotlin.collections", "none"),
           MemberName(packageName, FunctionNames.IS_PATH_TRAVERSAL_SEGMENT)
         )
         addStatement(
@@ -1632,16 +1714,24 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       buildCodeBlock {
         beginControlFlow("return·when")
 
-        beginControlFlow("startsWith('.') ->")
+        beginControlFlow("%M('.') ->", MemberName("kotlin.text", "startsWith"))
         addStatement(
-          "length·==·1·|| length·==·2·&&·endsWith('.')·|| length·==·4·&&·endsWith(%S, ignoreCase·=·true)",
+          "length·==·1·|| length·==·2·&&·%M('.')·|| length·==·4·&&·%M(%S, ignoreCase·=·true)",
+          MemberName("kotlin.text", "endsWith"),
+          MemberName("kotlin.text", "endsWith"),
           "%2E",
         )
         endControlFlow()
 
-        beginControlFlow("startsWith(%S, ignoreCase·=·true) ->", "%2E")
+        beginControlFlow(
+          "%M(%S, ignoreCase·=·true) ->",
+          MemberName("kotlin.text", "startsWith"),
+          "%2E"
+        )
         addStatement(
-          "length·==·3·|| length·==·4·&&·endsWith('.')·|| length·==·6·&&·endsWith(%S, ignoreCase·=·true)",
+          "length·==·3·|| length·==·4·&&·%M('.')·|| length·==·6·&&·%M(%S, ignoreCase·=·true)",
+          MemberName("kotlin.text", "endsWith"),
+          MemberName("kotlin.text", "endsWith"),
           "%2E",
         )
         endControlFlow()
@@ -1716,31 +1806,33 @@ private fun obtainSerializerCodeBlock(typeToSerializeName: TypeName): CodeBlock 
 
 // 'parametersBuilderNameReference' should be null if the target builder is a receiver type in the current scope.
 private fun addMapToParameterBuilderCodeBlock(
-  mapParameterName: String,
-  mapTypeName: TypeName,
+  parameterName: String,
+  typeName: TypeName,
+  mapType: ServiceDescription.MapType,
   parametersBuilderNameReference: String? = null
 ): CodeBlock = buildCodeBlock {
-  when (mapTypeName.classNameOrNull()?.canonicalName) {
-    StringValues::class.qualifiedName -> {
-      if (mapTypeName.isNullable) {
-        beginControlFlow("if ($mapParameterName·!= null)")
+  when (mapType) {
+    ServiceDescription.MapType.KtorStringValues -> {
+      if (typeName.isNullable) {
+        beginControlFlow("if ($parameterName·!= null)")
       }
       addStatement(
-        "%LappendAll($mapParameterName)",
+        "%LappendAll($parameterName)",
         parametersBuilderNameReference?.let { "$it." }.orEmpty()
       )
-      if (mapTypeName.isNullable) {
+      if (typeName.isNullable) {
         endControlFlow()
       }
     }
 
-    "kotlin.collections.Map" -> {
-      val valueTypeName = (mapTypeName as ParameterizedTypeName).typeArguments[1]
+    is ServiceDescription.MapType.Map -> {
+      // Map<String, T>
+      val valueTypeName = (typeName as ParameterizedTypeName).typeArguments[1]
       val valueTypeQualifiedName = valueTypeName.classNameOrNull()?.canonicalName
 
       beginControlFlow(
-        "$mapParameterName%L.%M { (key, value) ->",
-        if (mapTypeName.isNullable) "?" else "",
+        "$parameterName%L.%M { (key, value) ->",
+        if (typeName.isNullable) "?" else "",
         MemberName("kotlin.collections", "forEach")
       )
 
@@ -1756,7 +1848,7 @@ private fun addMapToParameterBuilderCodeBlock(
           )
         }
 
-        SUPPORTED_ITERABLE_TYPES.any { it.canonicalName == valueTypeQualifiedName } -> {
+        mapType.hasIterableValues -> {
           val iterableTypeArgumentName = (valueTypeName as ParameterizedTypeName).typeArguments[0]
           when {
             iterableTypeArgumentName.classNameOrNull()?.canonicalName != "kotlin.String" -> {
@@ -1805,7 +1897,85 @@ private fun addMapToParameterBuilderCodeBlock(
       endControlFlow()
     }
 
-    else -> error("Unexpected parameter type: $mapTypeName")
+    is ServiceDescription.MapType.IterableKeyValuePairs -> {
+      // Iterable<Pair<String, T>>
+      val pairTypeName = (typeName as ParameterizedTypeName).typeArguments.first()
+      check(
+        pairTypeName is ParameterizedTypeName &&
+          pairTypeName.rawType.canonicalName == "kotlin.Pair"
+      ) {
+        "Unexpected key-value pair type: $pairTypeName"
+      }
+
+      val valueTypeName = pairTypeName.typeArguments.last()
+      val valueTypeQualifiedName = valueTypeName.classNameOrNull()?.canonicalName
+
+      beginControlFlow(
+        "$parameterName%L.%M { (key, value) ->",
+        if (typeName.isNullable) "?" else "",
+        MemberName("kotlin.collections", "forEach")
+      )
+
+      if (valueTypeName.isNullable) {
+        beginControlFlow("if (value != null)")
+      }
+
+      when {
+        valueTypeQualifiedName == "kotlin.String" -> {
+          addStatement(
+            "%Lappend(key, value)",
+            parametersBuilderNameReference?.let { "$it." }.orEmpty()
+          )
+        }
+
+        mapType.hasIterableValues -> {
+          val iterableTypeArgumentName = (valueTypeName as ParameterizedTypeName).typeArguments.single()
+          when {
+            iterableTypeArgumentName.classNameOrNull()?.canonicalName != "kotlin.String" -> {
+              addStatement(
+                "%LappendAll(key, value.%M { it%L.toString() })",
+                parametersBuilderNameReference?.let { "$it." }.orEmpty(),
+                MemberName(
+                  "kotlin.collections",
+                  if (iterableTypeArgumentName.isNullable) "mapNotNull" else "map"
+                ),
+                if (iterableTypeArgumentName.isNullable) "?" else ""
+              )
+            }
+
+            // Iterable<String?>
+            iterableTypeArgumentName.isNullable -> {
+              addStatement(
+                "%LappendAll(key, value.%M())",
+                parametersBuilderNameReference?.let { "$it." }.orEmpty(),
+                MemberName("kotlin.collections", "filterNotNull")
+              )
+            }
+
+            // Iterable<String>
+            else -> {
+              addStatement(
+                "%LappendAll(key, value)",
+                parametersBuilderNameReference?.let { "$it." }.orEmpty()
+              )
+            }
+          }
+        }
+
+        else -> {
+          addStatement(
+            "%Lappend(key, value.toString())",
+            parametersBuilderNameReference?.let { "$it." }.orEmpty()
+          )
+        }
+      }
+
+      if (valueTypeName.isNullable) {
+        endControlFlow()
+      }
+
+      endControlFlow()
+    }
   }
 }
 
@@ -1826,7 +1996,6 @@ private object ClassNames {
     val HTTP_METHOD = HttpMethod::class.asClassName()
     val HTTP_REQUEST_BUILDER = HttpRequestBuilder::class.asClassName()
     val PARAMETERS_BUILDER = ParametersBuilder::class.asClassName()
-    val STRING_VALUES = StringValues::class.asClassName()
     val URL = Url::class.asClassName()
     val URL_BUILDER = URLBuilder::class.asClassName()
   }

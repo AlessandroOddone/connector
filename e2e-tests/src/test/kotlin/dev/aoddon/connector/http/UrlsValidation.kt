@@ -297,7 +297,7 @@ class UrlsValidationTest {
 
     sourceFile.runTestCompilation {
       assertKspErrors(
-        "@QueryMap parameter type must be either 'kotlin.collections.Map' or 'io.ktor.util.StringValues'. " +
+        "@QueryMap parameter must be of a supported Map, StringValues, or Iterable (of key-value pairs) type. " +
           "Found: 'kotlin.Pair'." atLine 13
       )
     }

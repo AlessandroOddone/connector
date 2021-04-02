@@ -1815,7 +1815,7 @@ class ContentValidationTest {
 
     sourceFile.runTestCompilation {
       assertKspErrors(
-        "@FieldMap parameter type must be either 'kotlin.collections.Map' or 'io.ktor.util.StringValues'. " +
+        "@FieldMap parameter must be of a supported Map, StringValues, or Iterable (of key-value pairs) type. " +
           "Found: 'kotlin.Pair'." atLine 14
       )
     }
@@ -1912,10 +1912,8 @@ class ContentValidationTest {
 
     sourceFile.runTestCompilation {
       assertKspErrors(
-        "@PartIterable parameter type must be one of: $expectedIterableTypes. " +
-          "Found: 'kotlin.String'." atLine 16,
-        "@PartIterable parameter type must be one of: $expectedIterableTypes. " +
-          "Found: 'kotlin.collections.ArrayList'." atLine 17
+        "@PartIterable parameter must be of a supported Iterable type. Found: 'kotlin.String'." atLine 16,
+        "@PartIterable parameter must be of a supported Iterable type. Found: 'kotlin.collections.ArrayList'." atLine 17
       )
     }
   }
@@ -1947,11 +1945,11 @@ class ContentValidationTest {
 
     sourceFile.runTestCompilation {
       assertKspErrors(
-        "@PartMap parameter type must be either 'kotlin.collections.Map', 'io.ktor.util.StringValues', " +
-          "or an Iterable of key-value pairs. Found: 'kotlin.Pair'." atLine 15,
+        "@PartMap parameter must be of a supported Map, StringValues, or Iterable (of key-value pairs) type. " +
+          "Found: 'kotlin.Pair'." atLine 15,
 
-        "@PartMap parameter type must be either 'kotlin.collections.Map', 'io.ktor.util.StringValues', " +
-          "or an Iterable of key-value pairs. Found: 'kotlin.collections.LinkedHashMap'." atLine 16
+        "@PartMap parameter must be of a supported Map, StringValues, or Iterable (of key-value pairs) type. " +
+          "Found: 'kotlin.collections.LinkedHashMap'." atLine 16
       )
     }
   }
