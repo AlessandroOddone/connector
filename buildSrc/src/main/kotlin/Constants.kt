@@ -1,11 +1,11 @@
 object Versions {
   const val COROUTINES = "1.4.2"
   const val DOKKA = "1.4.20"
-  const val KOTLIN = "1.4.30"
+  const val KOTLIN = "1.4.31"
   const val KOTLIN_POET = "1.7.2"
   const val KOTLIN_COMPILE_TESTING = "1.3.6"
   const val KOTLINX_SERIALIZATION = "1.0.1"
-  const val KSP = "1.4.30-1.0.0-alpha05"
+  const val KSP = "1.4.31-1.0.0-alpha06"
   const val KTLINT_GRADLE_PLUGIN = "9.4.1"
   const val KTOR = "1.5.2"
   const val MAVEN_PUBLISH_PLUGIN = "0.14.0"
