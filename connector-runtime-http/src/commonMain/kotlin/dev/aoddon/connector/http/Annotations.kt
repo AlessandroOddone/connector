@@ -41,6 +41,9 @@ public annotation class Query(val name: String)
 @Target(AnnotationTarget.VALUE_PARAMETER)
 public annotation class QueryMap
 
+@Target(AnnotationTarget.VALUE_PARAMETER)
+public annotation class QueryName
+
 /*
  * Headers
  */

@@ -39,6 +39,8 @@ private val BASE_URL = Url("https://name/collisions/")
     @Query("q") parameters: String,
     @Query("q") parameters_: List<String>,
     @QueryMap parameters__: Map<String, List<String?>?>,
+    @QueryName parameters___: String,
+    @QueryName parameters____: Set<String>,
     @HeaderMap headers: Map<String, String>,
     @HeaderMap headers_: Map<String, String>,
     @HeaderMap headers__: Map<String, String>,
@@ -128,6 +130,8 @@ class NameCollisionsTest {
       parameters = "value",
       parameters_ = listOf("value"),
       parameters__ = mapOf("q" to listOf("value")),
+      parameters___ = "queryName1",
+      parameters____ = setOf("queryName2", "queryName3"),
       headers = mapOf("h1" to "value"),
       headers_ = mapOf("h2" to "value"),
       headers__ = mapOf("h3" to "value"),
@@ -159,7 +163,7 @@ class NameCollisionsTest {
 
     assertHttpLogMatches(
       {
-        hasUrl("${BASE_URL}test?q=value${"&q=value".repeat(34)}")
+        hasUrl("${BASE_URL}test?q=value${"&q=value".repeat(34)}&queryName1&queryName2&queryName3")
         hasRequestHeaders(
           headersOf(
             "h1" to listOf("value"),

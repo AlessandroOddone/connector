@@ -389,59 +389,70 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       }
       url.dynamicQueryParameters.forEach { queryContent ->
         when (queryContent) {
-          is ServiceDescription.Url.QueryParameter.Single -> {
-            val queryParameterTypeName = parameters.getValue(queryContent.valueProviderParameter)
-            if (queryParameterTypeName.isNullable) {
-              beginControlFlow("if (${queryContent.valueProviderParameter}·!= null)")
+          is ServiceDescription.Url.QueryParameter.Single.HasValue -> {
+            val parameterTypeName = parameters.getValue(queryContent.valueProviderParameter)
+            if (parameterTypeName.isNullable) {
+              beginControlFlow("if (${queryContent.valueProviderParameter}·!=·null)")
             }
 
-            when (queryParameterTypeName.classNameOrNull()?.canonicalName) {
-              "kotlin.String" -> {
-                addStatement(
-                  "%L.append(%S, ${queryContent.valueProviderParameter})",
-                  nestedThisProperty("parameters"),
-                  queryContent.name
-                )
+            addStatement(
+              "%L.append(%S, %L)",
+              nestedThisProperty("parameters"),
+              queryContent.name,
+              when (parameterTypeName.classNameOrNull()?.canonicalName) {
+                "kotlin.String" -> queryContent.valueProviderParameter
+                else -> "${queryContent.valueProviderParameter}.toString()"
               }
-              else -> {
-                addStatement(
-                  "%L.append(%S, ${queryContent.valueProviderParameter}.toString())",
-                  nestedThisProperty("parameters"),
-                  queryContent.name
-                )
-              }
-            }
+            )
 
-            if (queryParameterTypeName.isNullable) {
+            if (parameterTypeName.isNullable) {
               endControlFlow()
             }
           }
 
-          is ServiceDescription.Url.QueryParameter.Iterable -> {
-            val queryParameterTypeName = parameters.getValue(queryContent.valueProviderParameter)
-            queryParameterTypeName as ParameterizedTypeName
-
-            if (queryParameterTypeName.isNullable) {
-              beginControlFlow("if (${queryContent.valueProviderParameter}·!= null)")
+          is ServiceDescription.Url.QueryParameter.Single.NoValue -> {
+            val parameterTypeName = parameters.getValue(queryContent.nameProviderParameter)
+            if (parameterTypeName.isNullable) {
+              beginControlFlow("if (${queryContent.nameProviderParameter}·!=·null)")
             }
 
-            val iterableTypeArgumentName = queryParameterTypeName.typeArguments[0]
+            addStatement(
+              "%L.appendAll(%L, %M())",
+              nestedThisProperty("parameters"),
+              when (parameterTypeName.classNameOrNull()?.canonicalName) {
+                "kotlin.String" -> queryContent.nameProviderParameter
+                else -> "${queryContent.nameProviderParameter}.toString()"
+              },
+              MemberName("kotlin.collections", "emptyList")
+            )
+
+            if (parameterTypeName.isNullable) {
+              endControlFlow()
+            }
+          }
+
+          is ServiceDescription.Url.QueryParameter.Iterable.HasValue -> {
+            val parameterTypeName = parameters.getValue(queryContent.valueProviderParameter)
+            if (parameterTypeName.isNullable) {
+              beginControlFlow("if (${queryContent.valueProviderParameter}·!=·null)")
+            }
+
             when {
-              iterableTypeArgumentName.classNameOrNull()?.canonicalName != "kotlin.String" -> {
+              queryContent.type.valueTypeName.classNameOrNull()?.canonicalName != "kotlin.String" -> {
                 addStatement(
                   "%L.appendAll(%S, ${queryContent.valueProviderParameter}.%M { it%L.toString() })",
                   nestedThisProperty("parameters"),
                   queryContent.name,
                   MemberName(
                     "kotlin.collections",
-                    if (iterableTypeArgumentName.isNullable) "mapNotNull" else "map"
+                    if (queryContent.type.valueTypeName.isNullable) "mapNotNull" else "map"
                   ),
-                  if (iterableTypeArgumentName.isNullable) "?" else ""
+                  if (queryContent.type.valueTypeName.isNullable) "?" else ""
                 )
               }
 
               // Iterable<String?>
-              iterableTypeArgumentName.isNullable -> {
+              queryContent.type.valueTypeName.isNullable -> {
                 addStatement(
                   "%L.appendAll(%S, ${queryContent.valueProviderParameter}.%M())",
                   nestedThisProperty("parameters"),
@@ -460,9 +471,39 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
               }
             }
 
-            if (queryParameterTypeName.isNullable) {
+            if (parameterTypeName.isNullable) {
               endControlFlow()
             }
+          }
+
+          is ServiceDescription.Url.QueryParameter.Iterable.NoValue -> {
+            val parameterTypeName = parameters.getValue(queryContent.nameProviderParameter)
+
+            beginControlFlow(
+              "${queryContent.nameProviderParameter}%L.%M",
+              if (parameterTypeName.isNullable) "?" else "",
+              MemberName("kotlin.collections", "forEach")
+            )
+
+            if (queryContent.type.valueTypeName.isNullable) {
+              beginControlFlow("if·(it·!=·null)")
+            }
+
+            addStatement(
+              "%L.appendAll(it%L, %M())",
+              nestedThisProperty("parameters"),
+              when (queryContent.type.valueTypeName.classNameOrNull()?.canonicalName) {
+                "kotlin.String" -> ""
+                else -> ".toString()"
+              },
+              MemberName("kotlin.collections", "emptyList")
+            )
+
+            if (queryContent.type.valueTypeName.isNullable) {
+              endControlFlow()
+            }
+
+            endControlFlow()
           }
 
           is ServiceDescription.Url.QueryParameter.Map -> {
