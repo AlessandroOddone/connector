@@ -71,22 +71,37 @@ private val BASE_URL = Url("https://urls/base/")
     @Query("q2") queryParam2: String
   )
 
-  @GET("nullable/any/query/parameters")
+  @GET("string/query/names")
+  suspend fun stringQueryNames(
+    @QueryName queryName1: String,
+    @QueryName queryName2: String
+  )
+
+  @GET("nullable/and/not/nullable/any/query/parameters")
   suspend fun nullableAndNotNullableAnyQueryParameters(
     @Query("q1") queryParam1: Any?,
     @Query("q2") queryParam2: Any
   )
 
-  @GET("nullable/any/query/parameters")
-  suspend fun nullableAnyQueryParameters(
-    @Query("q1") queryParam1: Any?,
-    @Query("q2") queryParam2: Any?
+  @GET("nullable/and/not/nullable/any/query/names")
+  suspend fun nullableAndNotNullableAnyQueryNames(
+    @QueryName queryName1: Any?,
+    @QueryName queryName2: Any
   )
 
-  @GET("mix/static/and/dynamic/query/parameters?q1=static1&q2=static2")
+  @GET("optional/query/parameters")
+  suspend fun optionalQueryParameters(
+    @Query("q1") queryParam1: Any?,
+    @Query("q2") queryParam2: Any?,
+    @QueryName queryName1: Any?,
+    @QueryName queryName2: Any?
+  )
+
+  @GET("mix/static/and/dynamic/query/parameters?q1=static1&q2=static2&staticQueryName")
   suspend fun mixStaticAndDynamicQueryParameters(
     @Query("q3") queryParam3: String,
-    @Query("q4") queryParam4: String
+    @Query("q4") queryParam4: String,
+    @QueryName dynamicQueryName: String
   )
 
   @GET("multiple/query/parameters/same/name?q=10")
@@ -98,26 +113,50 @@ private val BASE_URL = Url("https://urls/base/")
   @GET("multiple/query/parameters/same/name?q=10")
   suspend fun iterableOfStringQueryParametersWithSameName(@Query("q") q: Iterable<String>)
 
+  @GET("multiple/query/names?key=value&name1")
+  suspend fun iterableOfStringQueryNames(@QueryName names: Iterable<String>)
+
   @GET("multiple/query/parameters/same/name?q=10")
   suspend fun iterableOfAnyQueryParametersWithSameName(@Query("q") q: Iterable<Any>)
+
+  @GET("multiple/query/names?key=value&name1")
+  suspend fun iterableOfAnyQueryNames(@QueryName names: Iterable<Any>)
 
   @GET("multiple/query/parameters/same/name?q=10")
   suspend fun collectionOfStringQueryParametersWithSameName(@Query("q") q: Collection<Any>)
 
+  @GET("multiple/query/names?key=value&name1")
+  suspend fun collectionOfStringQueryNames(@QueryName names: Collection<Any>)
+
   @GET("multiple/query/parameters/same/name?q=10")
   suspend fun collectionOfAnyQueryParametersWithSameName(@Query("q") q: Collection<Any>)
+
+  @GET("multiple/query/names?key=value&name1")
+  suspend fun collectionOfAnyQueryNames(@QueryName names: Collection<Any>)
 
   @GET("multiple/query/parameters/same/name?q=10")
   suspend fun listOfStringQueryParametersWithSameName(@Query("q") q: List<String>)
 
+  @GET("multiple/query/names?key=value&name1")
+  suspend fun listOfStringQueryNames(@QueryName names: List<String>)
+
   @GET("multiple/query/parameters/same/name?q=10")
   suspend fun listOfAnyQueryParametersWithSameName(@Query("q") q: List<Any>)
+
+  @GET("multiple/query/names?key=value&name1")
+  suspend fun listOfAnyQueryNames(@QueryName names: List<Any>)
 
   @GET("multiple/query/parameters/same/name?q=10")
   suspend fun setOfStringQueryParametersWithSameName(@Query("q") q: Set<String>)
 
+  @GET("multiple/query/names?key=value&name1")
+  suspend fun setOfStringQueryNames(@QueryName names: Set<String>)
+
   @GET("multiple/query/parameters/same/name?q=10")
   suspend fun setOfAnyQueryParametersWithSameName(@Query("q") q: Set<Any>)
+
+  @GET("multiple/query/names?key=value&name1")
+  suspend fun setOfAnyQueryNames(@QueryName names: Set<Any>)
 
   @GET("multiple/query/parameters/same/name?q=10")
   suspend fun queryParameterIterableNullableTypes(
@@ -127,6 +166,12 @@ private val BASE_URL = Url("https://urls/base/")
     @Query("q") q4: Set<Any?>,
     @Query("q") q5: List<String?>?,
     @Query("q") q6: Iterable<Any?>?,
+    @QueryName qn1: Iterable<String>?,
+    @QueryName qn2: Collection<Any>?,
+    @QueryName qn3: List<String?>,
+    @QueryName qn4: Set<Any?>,
+    @QueryName qn5: List<String?>?,
+    @QueryName qn6: Iterable<Any?>?,
     @QueryMap stringValues: StringValues?,
     @QueryMap map1: Map<String, List<String?>?>?,
     @QueryMap map2: Map<String, Collection<Any?>?>?,
@@ -264,9 +309,18 @@ class UrlsTest {
     assertHttpLogMatches { hasUrl("https://urls/base/string/query/parameters?q1=value1&q2=value2") }
   }
 
+  @Test fun `String @QueryName parameter`() = runHttpTest {
+    val service = UrlsTestService(BASE_URL, httpClient)
+    service.stringQueryNames(
+      queryName1 = "name1",
+      queryName2 = "name2"
+    )
+    assertHttpLogMatches { hasUrl("https://urls/base/string/query/names?name1&name2") }
+  }
+
   @Test fun `'toString' of @Query object argument is used as the query parameter value`() = runHttpTest {
     val service = UrlsTestService(BASE_URL, httpClient)
-    service.nullableAnyQueryParameters(
+    service.nullableAndNotNullableAnyQueryParameters(
       queryParam1 = object : Any() {
         override fun toString() = "value1"
       },
@@ -274,7 +328,22 @@ class UrlsTest {
         override fun toString() = "value2"
       }
     )
-    assertHttpLogMatches { hasUrl("https://urls/base/nullable/any/query/parameters?q1=value1&q2=value2") }
+    assertHttpLogMatches {
+      hasUrl("https://urls/base/nullable/and/not/nullable/any/query/parameters?q1=value1&q2=value2")
+    }
+  }
+
+  @Test fun `'toString' of @QueryName object argument is used as the query parameter name`() = runHttpTest {
+    val service = UrlsTestService(BASE_URL, httpClient)
+    service.nullableAndNotNullableAnyQueryNames(
+      queryName1 = object : Any() {
+        override fun toString() = "name1"
+      },
+      queryName2 = object : Any() {
+        override fun toString() = "name2"
+      }
+    )
+    assertHttpLogMatches { hasUrl("https://urls/base/nullable/and/not/nullable/any/query/names?name1&name2") }
   }
 
   @Test fun `If the @Query argument is null, the query parameter is omitted`() = runHttpTest {
@@ -285,26 +354,40 @@ class UrlsTest {
         override fun toString() = "value2"
       }
     )
-    assertHttpLogMatches { hasUrl("https://urls/base/nullable/any/query/parameters?q2=value2") }
+    assertHttpLogMatches { hasUrl("https://urls/base/nullable/and/not/nullable/any/query/parameters?q2=value2") }
   }
 
-  @Test fun `If all @Query arguments are null, the query string is omitted`() = runHttpTest {
+  @Test fun `If the @QueryName argument is null, the query parameter is omitted`() = runHttpTest {
     val service = UrlsTestService(BASE_URL, httpClient)
-    service.nullableAnyQueryParameters(
-      queryParam1 = null,
-      queryParam2 = null
+    service.nullableAndNotNullableAnyQueryNames(
+      queryName1 = null,
+      queryName2 = object : Any() {
+        override fun toString() = "name2"
+      }
     )
-    assertHttpLogMatches { hasUrl("https://urls/base/nullable/any/query/parameters") }
+    assertHttpLogMatches { hasUrl("https://urls/base/nullable/and/not/nullable/any/query/names?name2") }
+  }
+
+  @Test fun `If all @Query and @QueryName arguments are null, the query string is omitted`() = runHttpTest {
+    val service = UrlsTestService(BASE_URL, httpClient)
+    service.optionalQueryParameters(
+      queryParam1 = null,
+      queryParam2 = null,
+      queryName1 = null,
+      queryName2 = null
+    )
+    assertHttpLogMatches { hasUrl("https://urls/base/optional/query/parameters") }
   }
 
   @Test fun `Can mix static and dynamic query parameters`() = runHttpTest {
     val service = UrlsTestService(BASE_URL, httpClient)
     service.mixStaticAndDynamicQueryParameters(
       queryParam3 = "dynamic3",
-      queryParam4 = "dynamic4"
+      queryParam4 = "dynamic4",
+      dynamicQueryName = "dynamicQueryName"
     )
     assertHttpLogMatches {
-      hasUrl("https://urls/base/mix/static/and/dynamic/query/parameters?q1=static1&q2=static2&q3=dynamic3&q4=dynamic4")
+      hasUrl("https://urls/base/mix/static/and/dynamic/query/parameters?q1=static1&q2=static2&staticQueryName&q3=dynamic3&q4=dynamic4&dynamicQueryName")
     }
   }
 
@@ -682,11 +765,103 @@ class UrlsTest {
     )
   }
 
-  @Test fun `@Query iterables with nullable values`() = runHttpTest {
+  @Test fun `@QueryName iterables with non-null values`() = runHttpTest {
+    val service = UrlsTestService(BASE_URL, httpClient)
+
+    // [key=value, name1]
+    service.iterableOfStringQueryNames(emptyList())
+    // [key=value, name1, name2, name3]
+    service.iterableOfStringQueryNames(listOf("name2", "name3"))
+    // [key=value, name1]
+    service.iterableOfAnyQueryNames(emptyList())
+    // [key=value, name1, name100]
+    service.iterableOfAnyQueryNames(
+      listOf(
+        object : Any() {
+          override fun toString() = "name100"
+        },
+      )
+    )
+
+    // [key=value, name1]
+    service.collectionOfStringQueryNames(emptyList())
+    // [key=value, name1, name2, name3]
+    service.collectionOfStringQueryNames(listOf("name2", "name3"))
+    // [key=value, name1]
+    service.collectionOfAnyQueryNames(emptyList())
+    // [key=value, name1, name100]
+    service.collectionOfAnyQueryNames(
+      listOf(
+        object : Any() {
+          override fun toString() = "name100"
+        },
+      )
+    )
+
+    // [key=value, name1]
+    service.listOfStringQueryNames(emptyList())
+    // [key=value, name1, name2, name3]
+    service.listOfStringQueryNames(listOf("name2", "name3"))
+    // [key=value, name1]
+    service.listOfAnyQueryNames(emptyList())
+    // [key=value, name1, name100]
+    service.listOfAnyQueryNames(
+      listOf(
+        object : Any() {
+          override fun toString() = "name100"
+        },
+      )
+    )
+
+    // [key=value, name1]
+    service.setOfStringQueryNames(emptySet())
+    // [key=value, name1, name2, name3]
+    service.setOfStringQueryNames(setOf("name2", "name3"))
+    // [key=value, name1]
+    service.setOfAnyQueryNames(emptySet())
+    // [key=value, name1, name100]
+    service.setOfAnyQueryNames(
+      setOf(
+        object : Any() {
+          override fun toString() = "name100"
+        },
+      )
+    )
+
+    assertHttpLogMatches(
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1") },
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1&name2&name3") },
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1") },
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1&name100") },
+
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1") },
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1&name2&name3") },
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1") },
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1&name100") },
+
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1") },
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1&name2&name3") },
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1") },
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1&name100") },
+
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1") },
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1&name2&name3") },
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1") },
+      { hasUrl("https://urls/base/multiple/query/names?key=value&name1&name100") },
+    )
+  }
+
+  @Test fun `@Query and @QueryName iterables with nullable values`() = runHttpTest {
     val service = UrlsTestService(BASE_URL, httpClient)
 
     // [10]
     service.queryParameterIterableNullableTypes(
+      null,
+      null,
+      listOf(null),
+      setOf(null),
+      null,
+      null,
       null,
       null,
       listOf(null),
@@ -701,13 +876,22 @@ class UrlsTest {
     )
     // [10, 20, 30, 40, 50, 60, 70]
     service.queryParameterIterableNullableTypes(
+      // @Query
       null,
       null,
       listOf("20", "30"),
       setOf(null, "40"),
       listOf("50", null, "60"),
       setOf(null, "70", null),
+      // @QueryName
       null,
+      null,
+      listOf("name1", "name2"),
+      setOf(null, "name3"),
+      listOf("name4", null, "name5"),
+      setOf(null, "name6", null),
+      null,
+      // @QueryMap
       mapOf(
         "q" to null,
       ),
@@ -726,7 +910,7 @@ class UrlsTest {
 
     assertHttpLogMatches(
       { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10") },
-      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=20&q=30&q=40&q=50&q=60&q=70&q=80&q=90") },
+      { hasUrl("https://urls/base/multiple/query/parameters/same/name?q=10&q=20&q=30&q=40&q=50&q=60&q=70&q=80&q=90&name1&name2&name3&name4&name5&name6") },
     )
   }
 
@@ -986,6 +1170,12 @@ class UrlsTest {
     val service = UrlsTestService(BASE_URL, httpClient)
 
     service.queryParameterIterableNullableTypes(
+      null,
+      null,
+      emptyList(),
+      emptySet(),
+      null,
+      null,
       null,
       null,
       emptyList(),

@@ -337,6 +337,7 @@ internal class ServiceParser(logger: KSPLogger) {
           is HttpParameterAnnotation.Field.Single,
           is HttpParameterAnnotation.Header.Single,
           is HttpParameterAnnotation.Path,
+          is HttpParameterAnnotation.Query.Name,
           is HttpParameterAnnotation.Query.Single,
           is HttpParameterAnnotation.Streaming,
           is HttpParameterAnnotation.Url -> parameterTypeReference.resolveTypeInfo()
@@ -381,18 +382,34 @@ internal class ServiceParser(logger: KSPLogger) {
             val parameterName = queryAnnotation.parameter.name?.asString() ?: return@mapNotNull null
             val typeInfo = serviceFunctionParameters?.get(parameterName) ?: return@mapNotNull null
             if (typeInfo.isSupportedIterable) {
-              ServiceDescription.Url.QueryParameter.Iterable(
+              ServiceDescription.Url.QueryParameter.Iterable.HasValue(
                 name = queryAnnotation.name,
                 type = typeInfo.iterableTypeOrNull() ?: return@mapNotNull null,
                 valueProviderParameter = parameterName,
               )
             } else {
-              ServiceDescription.Url.QueryParameter.Single(
+              ServiceDescription.Url.QueryParameter.Single.HasValue(
                 name = queryAnnotation.name,
                 valueProviderParameter = parameterName,
               )
             }
           }
+
+          is HttpParameterAnnotation.Query.Name -> {
+            val parameterName = queryAnnotation.parameter.name?.asString() ?: return@mapNotNull null
+            val typeInfo = serviceFunctionParameters?.get(parameterName) ?: return@mapNotNull null
+            if (typeInfo.isSupportedIterable) {
+              ServiceDescription.Url.QueryParameter.Iterable.NoValue(
+                type = typeInfo.iterableTypeOrNull() ?: return@mapNotNull null,
+                nameProviderParameter = parameterName,
+              )
+            } else {
+              ServiceDescription.Url.QueryParameter.Single.NoValue(
+                nameProviderParameter = parameterName,
+              )
+            }
+          }
+
           is HttpParameterAnnotation.Query.Map -> {
             val parameterName = queryAnnotation.parameter.name?.asString() ?: return@mapNotNull null
             val typeInfo = serviceFunctionParameters?.get(parameterName) ?: return@mapNotNull null
@@ -1013,6 +1030,14 @@ internal class ServiceParser(logger: KSPLogger) {
             annotationType = resolvedAnnotationType
           )
         }
+        "QueryName" -> {
+          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+          HttpParameterAnnotation.Query.Name(
+            parameter = this,
+            annotation = annotation,
+            annotationType = resolvedAnnotationType
+          )
+        }
         "Streaming" -> {
           val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
           HttpParameterAnnotation.Streaming(
@@ -1526,6 +1551,12 @@ private sealed class HttpParameterAnnotation {
     ) : HttpParameterAnnotation.Query()
 
     data class Map(
+      override val parameter: KSValueParameter,
+      override val annotation: KSAnnotation,
+      override val annotationType: KSType
+    ) : HttpParameterAnnotation.Query()
+
+    data class Name(
       override val parameter: KSValueParameter,
       override val annotation: KSAnnotation,
       override val annotationType: KSType

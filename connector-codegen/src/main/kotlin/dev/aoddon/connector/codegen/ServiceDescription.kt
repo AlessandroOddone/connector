@@ -53,13 +53,25 @@ public data class ServiceDescription(
     ) : Url()
 
     public sealed class QueryParameter {
-      public data class Single(val name: String, val valueProviderParameter: String) : QueryParameter()
+      public sealed class Single : QueryParameter() {
+        public data class HasValue(val name: String, val valueProviderParameter: String) : Single()
+        public data class NoValue(val nameProviderParameter: String) : Single()
+      }
 
-      public data class Iterable(
-        val name: String,
-        val type: IterableType,
-        val valueProviderParameter: String,
-      ) : QueryParameter()
+      public sealed class Iterable : QueryParameter() {
+        public abstract val type: IterableType
+
+        public data class HasValue(
+          val name: String,
+          override val type: IterableType,
+          val valueProviderParameter: String,
+        ) : Iterable()
+
+        public data class NoValue(
+          override val type: IterableType,
+          val nameProviderParameter: String
+        ) : Iterable()
+      }
 
       public data class Map(val type: MapType, val valueProviderParameter: String) : QueryParameter()
     }
