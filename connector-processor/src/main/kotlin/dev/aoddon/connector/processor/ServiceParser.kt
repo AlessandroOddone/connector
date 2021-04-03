@@ -383,6 +383,7 @@ internal class ServiceParser(logger: KSPLogger) {
             if (typeInfo.isSupportedIterable) {
               ServiceDescription.Url.QueryParameter.Iterable(
                 name = queryAnnotation.name,
+                type = typeInfo.iterableTypeOrNull() ?: return@mapNotNull null,
                 valueProviderParameter = parameterName,
               )
             } else {
@@ -458,6 +459,7 @@ internal class ServiceParser(logger: KSPLogger) {
             if (typeInfo.isSupportedIterable) {
               ServiceDescription.Function.Http.Header.DynamicIterable(
                 name = headerName,
+                type = typeInfo.iterableTypeOrNull() ?: return@mapNotNull null,
                 valueProviderParameter = parameterName,
               )
             } else {
@@ -568,6 +570,7 @@ internal class ServiceParser(logger: KSPLogger) {
             }
             is HttpParameterAnnotation.Part.Iterable -> {
               ServiceDescription.HttpContent.Multipart.PartContent.Iterable(
+                type = partParameterTypeInfo.iterableTypeOrNull() ?: return@mapNotNull null,
                 valueProviderParameter = parameterName,
                 metadata = null
               )
@@ -609,6 +612,7 @@ internal class ServiceParser(logger: KSPLogger) {
             metadata = partMetadata
           )
           is HttpParameterAnnotation.Part.Iterable -> ServiceDescription.HttpContent.Multipart.PartContent.Iterable(
+            type = partParameterTypeInfo.iterableTypeOrNull() ?: return@mapNotNull null,
             valueProviderParameter = parameterName,
             metadata = partMetadata
           )
@@ -634,6 +638,7 @@ internal class ServiceParser(logger: KSPLogger) {
               if (typeInfo.isSupportedIterable) {
                 ServiceDescription.HttpContent.FormUrlEncoded.FieldContent.Iterable(
                   name = fieldAnnotation.name,
+                  type = typeInfo.iterableTypeOrNull() ?: return@mapNotNull null,
                   valueProviderParameter = parameterName,
                 )
               } else {
@@ -1553,16 +1558,36 @@ private fun KSAnnotation.resolveConnectorHttpAnnotation(): KSType? =
 private fun KSAnnotation.resolveAnnotationFromPackage(packageName: String): KSType? =
   annotationType.resolve().takeIf { it.packageName == packageName }
 
+private fun TypeInfo.iterableTypeOrNull(): ServiceDescription.IterableType? {
+  return when {
+    isSupportedIterable -> ServiceDescription.IterableType(
+      valueTypeName = arguments.singleOrNull()?.typeName ?: return null
+    )
+    else -> null
+  }
+}
+
 private fun TypeInfo.mapTypeOrNull(): ServiceDescription.MapType? {
   return when {
     isSupportedMap -> ServiceDescription.MapType.Map(
-      hasIterableValues = arguments.lastOrNull()?.isSupportedIterable ?: return null
+      valueType = arguments.lastOrNull()?.valueTypeOrNull() ?: return null
     )
     isSupportedIterable -> ServiceDescription.MapType.IterableKeyValuePairs(
-      hasIterableValues = arguments.singleOrNull()?.arguments?.lastOrNull()?.isSupportedIterable ?: return null
+      valueType = arguments.singleOrNull()?.arguments?.lastOrNull()?.valueTypeOrNull() ?: return null
     )
     isSupportedKtorStringValues -> ServiceDescription.MapType.KtorStringValues
     else -> null
+  }
+}
+
+private fun TypeInfo.valueTypeOrNull(): ServiceDescription.MapType.ValueType? {
+  return if (isSupportedIterable) {
+    ServiceDescription.MapType.ValueType.Iterable(
+      typeName = typeName ?: return null,
+      valueTypeName = arguments.singleOrNull()?.typeName ?: return null
+    )
+  } else {
+    ServiceDescription.MapType.ValueType.Single(typeName = typeName ?: return null)
   }
 }
 
