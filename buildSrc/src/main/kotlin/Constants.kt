@@ -7,7 +7,7 @@ object Versions {
   const val KOTLINX_SERIALIZATION = "1.1.0"
   const val KSP = "1.4.32-1.0.0-alpha07"
   const val KTLINT_GRADLE_PLUGIN = "10.0.0"
-  const val KTOR = "1.5.2"
+  const val KTOR = "2.0.0-eap-80"
   const val MAVEN_PUBLISH_PLUGIN = "0.14.2"
 }
 

@@ -17,11 +17,9 @@ plugins {
 subprojects {
   repositories {
     gradlePluginPortal()
-    mavenCentral()
     google()
-    maven { url = uri("https://kotlin.bintray.com/kotlinx/") }
-    maven { url = uri("https://dl.bintray.com/kotlin/kotlin-eap") }
-    jcenter()
+    mavenCentral()
+    maven { url = uri("https://maven.pkg.jetbrains.space/public/p/ktor/eap") }
     mavenLocal()
   }
 
