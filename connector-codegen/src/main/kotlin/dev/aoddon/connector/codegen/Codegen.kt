@@ -664,16 +664,22 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         beginControlFlow("${content.valueProviderParameter}?.%M", MemberName("kotlin", "let"))
       }
 
-      val contentTypeVariableName = variableName("contentType")
-      add(
-        contentTypeVariable(
-          variableName = contentTypeVariableName,
-          contentType = content.contentType
+      val contentTypeVariableNameOrNull: String = if (content.contentType != null) {
+        variableName("contentType")
+      } else {
+        "null"
+      }
+      if (content.contentType != null) {
+        add(
+          contentTypeVariable(
+            variableName = contentTypeVariableNameOrNull,
+            contentType = content.contentType
+          )
         )
-      )
+      }
 
       add(
-        "%L.%M($contentTypeVariableName).write(\n",
+        "%L.%M($contentTypeVariableNameOrNull).write(\n",
         serviceClassProperty(ParameterNames.HTTP_BODY_SERIALIZERS, isNestedThis = true),
         MemberName(packageName, FunctionNames.FIRST_WRITER_OF)
       )
@@ -696,7 +702,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         }
       )
       add(",\n")
-      add(contentTypeVariableName)
+      add(contentTypeVariableNameOrNull)
       add("\n")
       unindent()
       add(")\n")
@@ -734,7 +740,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       fun appendPart(
         referenceLiteral: String,
         typeName: TypeName,
-        contentType: String,
+        contentType: String?,
         formFieldNameLiteral: String?,
         isIsolatedBlock: Boolean = false
       ) = buildCodeBlock {
@@ -748,8 +754,14 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           beginControlFlow("$referenceLiteral.%M", MemberName("kotlin", "let"))
         }
 
-        val contentTypeVariableName = variableName("contentType")
-        add(contentTypeVariable(variableName = contentTypeVariableName, contentType = contentType))
+        val contentTypeVariableNameOrNull = if (contentType != null) {
+          variableName("contentType")
+        } else {
+          "null"
+        }
+        if (contentType != null) {
+          add(contentTypeVariable(variableName = contentTypeVariableNameOrNull, contentType = contentType))
+        }
         if (formFieldNameLiteral != null) {
           add("appendFormPart(\n")
           indent()
@@ -762,7 +774,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           "%L.%M(%L).write(\n",
           serviceClassProperty(ParameterNames.HTTP_BODY_SERIALIZERS, isNestedThis = true),
           MemberName(packageName, FunctionNames.FIRST_WRITER_OF),
-          contentTypeVariableName
+          contentTypeVariableNameOrNull
         )
         indent()
         add(
@@ -783,7 +795,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           }
         )
         add(",\n")
-        add(contentTypeVariableName)
+        add(contentTypeVariableNameOrNull)
         add("\n")
         unindent()
         add(")\n")
@@ -1458,7 +1470,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       .addParameter(
         ParameterSpec(
           contentTypeParameterName,
-          ClassNames.Ktor.CONTENT_TYPE
+          ClassNames.Ktor.CONTENT_TYPE.copy(nullable = true)
         )
       )
       .returns(ClassNames.HTTP_BODY_SERIALIZER)

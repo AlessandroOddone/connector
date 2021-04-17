@@ -39,15 +39,29 @@ class ContentValidationTest {
       import dev.aoddon.connector.http.*
 
       @Service interface TestApi {
-        @POST("post") suspend fun post(
-          @Body("application_json") body: String
+        @POST("post") 
+        suspend fun post(
+          @Body(contentType = "application_json") body: String
+        )
+        
+        @POST("multipart")
+        @Multipart("mixed")
+        suspend fun multipart(
+          @Part(contentType = "application") part: String,
+          @PartIterable(contentType = "/") partIterable: List<String>,
+          @PartMap(contentType = "json") partMap: Map<String, String>,
         )
       }
       """
     )
 
     sourceFile.runTestCompilation {
-      assertKspErrors("Invalid Content-Type format: 'application_json'." atLine 8)
+      assertKspErrors(
+        "Invalid Content-Type format: 'application_json'" atLine 9,
+        "Invalid Content-Type format: 'application'" atLine 15,
+        "Invalid Content-Type format: '/'" atLine 16,
+        "Invalid Content-Type format: 'json'" atLine 17,
+      )
     }
   }
 
@@ -2014,7 +2028,7 @@ class ContentValidationTest {
     }
   }
 
-  @Test fun `@Part must provide contentType and formFieldName for @Multipart(form-data) when the parameter type is NOT PartData`() {
+  @Test fun `@Part must provide non-blank formFieldName for @Multipart(form-data) when the parameter type is NOT PartData`() {
     val sourceFile = SourceFile.kotlin(
       "Test.kt",
       """
@@ -2025,33 +2039,32 @@ class ContentValidationTest {
 
       data class StringWrapper(val value: String)
 
-      @Service interface TestApi {
+      @Service interface TestApi { 
         @POST("post") 
         @Multipart // form-data is the default
-        suspend fun post(@Part(formFieldName = "p") p: String)
-        
-        @POST("post") 
-        @Multipart("form-data")
         suspend fun post(@Part(contentType = "*/*") p: String)
         
         @POST("post") 
         @Multipart("form-data")
         suspend fun post(@Part p: String)
+        
+        @POST("post") 
+        @Multipart("form-data")
+        suspend fun post(@Part(formFieldName = "   ") p: String)
       }
       """
     )
 
     sourceFile.runTestCompilation {
       assertKspErrors(
-        "@Part must provide a non-blank 'contentType' or use PartData as the parameter type." atLine 11,
+        "When the @Multipart subtype is 'form-data' (the default), @Part must provide a non-blank 'formFieldName' or use PartData as the parameter type." atLine 11,
         "When the @Multipart subtype is 'form-data' (the default), @Part must provide a non-blank 'formFieldName' or use PartData as the parameter type." atLine 15,
-        "@Part must provide a non-blank 'contentType' or use PartData as the parameter type." atLine 19,
-        "When the @Multipart subtype is 'form-data' (the default), @Part must provide a non-blank 'formFieldName' or use PartData as the parameter type." atLine 19
+        "When the @Multipart subtype is 'form-data' (the default), @Part must provide a non-blank 'formFieldName' or use PartData as the parameter type." atLine 19,
       )
     }
   }
 
-  @Test fun `@PartIterable must provide contentType and formFieldName for @Multipart(form-data) when the iterable type argument is NOT PartData`() {
+  @Test fun `@PartIterable must provide non-blank formFieldName for @Multipart(form-data) when the iterable type argument is NOT PartData`() {
     val sourceFile = SourceFile.kotlin(
       "Test.kt",
       """
@@ -2065,25 +2078,24 @@ class ContentValidationTest {
       @Service interface TestApi {
         @POST("post") 
         @Multipart // form-data is the default
-        suspend fun post(@PartIterable(formFieldName = "p") parts: List<String>)
-        
-        @POST("post") 
-        @Multipart("form-data")
         suspend fun post(@PartIterable(contentType = "*/*") parts: Collection<String>)
         
         @POST("post") 
         @Multipart("form-data")
         suspend fun post(@PartIterable parts: Set<String>)
+        
+        @POST("post") 
+        @Multipart("form-data")
+        suspend fun post(@PartIterable(formFieldName = "   ") parts: Set<String>)
       }
       """
     )
 
     sourceFile.runTestCompilation {
       assertKspErrors(
-        "@PartIterable must provide a non-blank 'contentType' or use parts of type PartData." atLine 11,
+        "When the @Multipart subtype is 'form-data' (the default), @PartIterable must provide a non-blank 'formFieldName' or use parts of type PartData." atLine 11,
         "When the @Multipart subtype is 'form-data' (the default), @PartIterable must provide a non-blank 'formFieldName' or use parts of type PartData." atLine 15,
-        "@PartIterable must provide a non-blank 'contentType' or use parts of type PartData." atLine 19,
-        "When the @Multipart subtype is 'form-data' (the default), @PartIterable must provide a non-blank 'formFieldName' or use parts of type PartData." atLine 19
+        "When the @Multipart subtype is 'form-data' (the default), @PartIterable must provide a non-blank 'formFieldName' or use parts of type PartData." atLine 19,
       )
     }
   }
@@ -2160,38 +2172,6 @@ class ContentValidationTest {
         "@PartIterable must not define a 'contentType' when the parts are of type PartData." atLine 16,
         "@PartIterable must not define a 'contentType' when the parts are of type PartData." atLine 20,
         "@PartIterable must not define a 'formFieldName' when the parts are of type PartData." atLine 20
-      )
-    }
-  }
-
-  @Test fun `@PartIterable must provide contentType when the iterable type argument is NOT PartData`() {
-    val sourceFile = SourceFile.kotlin(
-      "Test.kt",
-      """
-      package test
-
-      import dev.aoddon.connector.*
-      import dev.aoddon.connector.http.*
-      import io.ktor.util.StringValues
-
-      data class StringWrapper(val value: String)
-
-      @Service interface TestApi {
-        @POST("post") 
-        @Multipart("form-data")
-        suspend fun post(@PartIterable(formFieldName = "p") parts: List<String>)
-        
-        @POST("post") 
-        @Multipart("mixed")
-        suspend fun post(@PartIterable parts: Set<Boolean>)
-      }
-      """
-    )
-
-    sourceFile.runTestCompilation {
-      assertKspErrors(
-        "@PartIterable must provide a non-blank 'contentType' or use parts of type PartData." atLine 12,
-        "@PartIterable must provide a non-blank 'contentType' or use parts of type PartData." atLine 16
       )
     }
   }

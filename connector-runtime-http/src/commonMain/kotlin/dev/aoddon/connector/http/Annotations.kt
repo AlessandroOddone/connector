@@ -62,7 +62,7 @@ public annotation class HeaderMap
  */
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
-public annotation class Body(val contentType: String)
+public annotation class Body(val contentType: String = "")
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
 public annotation class Streaming
@@ -94,4 +94,4 @@ public annotation class Part(val contentType: String = "", val formFieldName: St
 public annotation class PartIterable(val contentType: String = "", val formFieldName: String = "")
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
-public annotation class PartMap(val contentType: String)
+public annotation class PartMap(val contentType: String = "")

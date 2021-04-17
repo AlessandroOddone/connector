@@ -80,7 +80,7 @@ public data class ServiceDescription(
   public sealed class HttpContent {
     public data class Body(
       public val valueProviderParameter: String,
-      public val contentType: String
+      public val contentType: String?
     ) : HttpContent()
 
     public data class FormUrlEncoded(val fields: List<FieldContent>) : HttpContent() {
@@ -110,12 +110,12 @@ public data class ServiceDescription(
         public data class Map(
           val type: MapType,
           val valueProviderParameter: String,
-          val contentType: String
+          val contentType: String?
         ) : PartContent()
       }
 
       public data class PartMetadata(
-        public val contentType: String,
+        public val contentType: String?,
         public val formFieldName: String?
       )
     }

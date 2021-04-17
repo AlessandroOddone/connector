@@ -10,19 +10,26 @@ import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.json.Json
 
-object JsonBodySerializer : HttpBodySerializer {
+class JsonBodySerializer(
+  private val contentTypeMatcher: (ContentType?) -> Boolean = { contentType ->
+    contentType?.match(ContentType.Application.Json) == true
+  }
+) : HttpBodySerializer {
   private val json = Json.Default
 
-  override fun canWrite(contentType: ContentType) = contentType.match(ContentType.Application.Json)
+  override fun canWrite(contentType: ContentType?) = contentTypeMatcher(contentType)
 
-  override fun canRead(contentType: ContentType?) = contentType?.match(ContentType.Application.Json) == true
+  override fun canRead(contentType: ContentType?) = contentTypeMatcher(contentType)
 
   override fun <T> write(
     serializationStrategy: SerializationStrategy<T>,
     body: T,
-    contentType: ContentType
+    contentType: ContentType?
   ): OutgoingContent {
-    return TextContent(json.encodeToString(serializationStrategy, body), contentType)
+    return TextContent(
+      text = json.encodeToString(serializationStrategy, body),
+      contentType = contentType ?: ContentType.Application.Json
+    )
   }
 
   override suspend fun <T> read(

@@ -334,11 +334,35 @@ private const val JSON = "application/json"
     @PartMap(JSON) map: Map<String, String>?,
     @PartMap(JSON) stringValues: StringValues?
   )
+
+  @POST("stringPartWithoutContentType")
+  @Multipart(subtype = "mixed")
+  suspend fun stringPartWithoutContentType(@Part part: String)
+
+  @POST("stringPartWithEmptyContentType")
+  @Multipart(subtype = "mixed")
+  suspend fun stringPartWithEmptyContentType(@Part(contentType = "") part: String)
+
+  @POST("stringPartIterableWithoutContentType")
+  @Multipart(subtype = "mixed")
+  suspend fun stringPartIterableWithoutContentType(@PartIterable parts: List<String>)
+
+  @POST("stringPartIterableWithEmptyContentType")
+  @Multipart(subtype = "mixed")
+  suspend fun stringPartIterableWithEmptyContentType(@PartIterable(contentType = "") parts: List<String>)
+
+  @POST("stringPartMapWithoutContentType")
+  @Multipart(subtype = "mixed")
+  suspend fun stringPartMapWithoutContentType(@PartMap parts: Map<String, String>)
+
+  @POST("stringPartMapWithEmptyContentType")
+  @Multipart(subtype = "mixed")
+  suspend fun stringPartMapWithEmptyContentType(@PartMap(contentType = "") parts: Map<String, String>)
 }
 
 class MultipartTest {
   @Test fun `@Multipart form String @Part`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormStringField("value")
 
@@ -356,7 +380,7 @@ class MultipartTest {
   }
 
   @Test fun `@Multipart form String @PartIterable`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormStringIterableFields(emptyList())
     service.multipartFormStringCollectionFields(listOf("1", "2", "3"))
@@ -422,7 +446,7 @@ class MultipartTest {
   }
 
   @Test fun `@Multipart form Serializable @Part`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormSerializableField(
       Node(id = "1", payload = 1, children = emptyList())
@@ -442,7 +466,7 @@ class MultipartTest {
   }
 
   @Test fun `@Multipart form Serializable @PartIterable`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormSerializableIterableFields(emptyList())
     service.multipartFormSerializableCollectionFields(
@@ -524,7 +548,7 @@ class MultipartTest {
   }
 
   @Test fun `@Multipart form HttpBody @Part`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormHttpBodyField(HttpBody("value"))
 
@@ -542,7 +566,7 @@ class MultipartTest {
   }
 
   @Test fun `@Multipart form HttpBody @PartIterable`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormHttpBodyIterableFields(emptyList())
     service.multipartFormHttpBodyCollectionFields(
@@ -618,7 +642,7 @@ class MultipartTest {
   }
 
   @Test fun `@PartMap StringValues`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormStringValues(
       parametersOf(
@@ -652,7 +676,7 @@ class MultipartTest {
   }
 
   @Test fun `@PartMap Parameters`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormParameters(
       parametersOf(
@@ -686,7 +710,7 @@ class MultipartTest {
   }
 
   @Test fun `@PartMap Headers`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormHeaders(
       headersOf(
@@ -720,7 +744,7 @@ class MultipartTest {
   }
 
   @Test fun `@PartMap Map with String values`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormStringMap(
       mapOf(
@@ -748,7 +772,7 @@ class MultipartTest {
   }
 
   @Test fun `@PartMap Map with Serializable values`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormMapOfSerializable(
       mapOf(
@@ -776,7 +800,7 @@ class MultipartTest {
   }
 
   @Test fun `@PartMap Map with HttpBody values`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormMapOfHttpBody(
       mapOf(
@@ -804,7 +828,7 @@ class MultipartTest {
   }
 
   @Test fun `@PartMap List of Pairs with String values`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormListOfPairsWithStringValues(
       listOf(
@@ -844,7 +868,7 @@ class MultipartTest {
   }
 
   @Test fun `@PartMap List of Pairs with Serializable values`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormListOfPairsWithSerializableValues(
       listOf(
@@ -884,7 +908,7 @@ class MultipartTest {
   }
 
   @Test fun `@PartMap List of Pairs with HttpBody values`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormListOfPairsWithHttpBodyValues(
       listOf(
@@ -924,7 +948,7 @@ class MultipartTest {
   }
 
   @Test fun `@Multipart mixed String @Part`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartMixedStringParameter("value")
 
@@ -942,7 +966,7 @@ class MultipartTest {
   }
 
   @Test fun `@Multipart mixed String @PartIterable`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartMixedStringIterableParameter(emptyList())
     service.multipartMixedStringCollectionParameter(listOf("1", "2", "3"))
@@ -1008,7 +1032,7 @@ class MultipartTest {
   }
 
   @Test fun `@Multipart mixed Serializable @Part`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartMixedSerializableParameter(
       Node(id = "1", payload = 1, children = emptyList())
@@ -1028,7 +1052,7 @@ class MultipartTest {
   }
 
   @Test fun `@Multipart mixed Serializable @PartIterable`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartMixedSerializableIterableParameter(emptyList())
     service.multipartMixedSerializableCollectionParameter(
@@ -1110,7 +1134,7 @@ class MultipartTest {
   }
 
   @Test fun `@Multipart mixed HttpBody @Part`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartMixedHttpBodyParameter(HttpBody("value"))
 
@@ -1128,7 +1152,7 @@ class MultipartTest {
   }
 
   @Test fun `@Multipart mixed HttpBody @PartIterable`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartMixedHttpBodyIterableParameter(emptyList())
     service.multipartMixedHttpBodyCollectionParameter(
@@ -1204,7 +1228,7 @@ class MultipartTest {
   }
 
   @Test fun `PartData BinaryItem @Part`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     val partData = PartData.BinaryItem(
       provider = { ByteReadPacket("value".encodeToByteArray()) },
@@ -1242,7 +1266,7 @@ class MultipartTest {
   }
 
   @Test fun `PartData FileItem @Part`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     val partData = PartData.FileItem(
       provider = { ByteReadPacket("value".encodeToByteArray()) },
@@ -1280,7 +1304,7 @@ class MultipartTest {
   }
 
   @Test fun `PartData FormItem @Part`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     val partData = PartData.FormItem(
       value = "value",
@@ -1318,7 +1342,7 @@ class MultipartTest {
   }
 
   @Test fun `PartData @PartIterable`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     val binaryPart = PartData.BinaryItem(
       provider = { ByteReadPacket("binary".encodeToByteArray()) },
@@ -1509,7 +1533,7 @@ class MultipartTest {
   }
 
   @Test fun `@Multipart form with multiple parameters`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     fun node(id: String) = Node(id, 1, emptyList())
 
@@ -1667,7 +1691,7 @@ class MultipartTest {
   }
 
   @Test fun `@Multipart mixed with multiple parameters`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     fun node(id: String) = Node(id, 1, emptyList())
 
@@ -1825,7 +1849,7 @@ class MultipartTest {
   }
 
   @Test fun `@Multipart null arguments`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormNullableTypes(
       text = null,
@@ -1880,7 +1904,7 @@ class MultipartTest {
   }
 
   @Test fun `@Multipart collections with null values`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormNullableTypes(
       text = null,
@@ -2027,7 +2051,7 @@ class MultipartTest {
   }
 
   @Test fun `Empty request body when all parts are missing`() = runHttpTest {
-    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = MultipartTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     service.multipartFormPotentiallyEmpty(null, null, null, null)
     service.multipartFormPotentiallyEmpty(null, emptyList(), emptyMap(), StringValues.Empty)
@@ -2048,6 +2072,96 @@ class MultipartTest {
       { hasRequestBody(ByteArray(0), null) },
       { hasRequestBody(ByteArray(0), null) },
       { hasRequestBody(ByteArray(0), null) }
+    )
+  }
+
+  @Test fun `@Part without a Content-Type`() = runHttpTest {
+    val service = MultipartTestService(
+      BASE_URL,
+      httpClient,
+      listOf(JsonBodySerializer(contentTypeMatcher = { true }))
+    )
+
+    service.stringPartWithoutContentType("12345")
+
+    httpLog.single().assertHasMultipartContent(
+      "mixed",
+      listOf(TextPart(null, JSON, "\"12345\""))
+    )
+  }
+
+  @Test fun `@Part with an empty Content-Type`() = runHttpTest {
+    val service = MultipartTestService(
+      BASE_URL,
+      httpClient,
+      listOf(JsonBodySerializer(contentTypeMatcher = { true }))
+    )
+
+    service.stringPartWithEmptyContentType("12345")
+
+    httpLog.single().assertHasMultipartContent(
+      "mixed",
+      listOf(TextPart(null, JSON, "\"12345\""))
+    )
+  }
+
+  @Test fun `@PartIterable without a Content-Type`() = runHttpTest {
+    val service = MultipartTestService(
+      BASE_URL,
+      httpClient,
+      listOf(JsonBodySerializer(contentTypeMatcher = { true }))
+    )
+
+    service.stringPartIterableWithoutContentType(listOf("12345"))
+
+    httpLog.single().assertHasMultipartContent(
+      "mixed",
+      listOf(TextPart(null, JSON, "\"12345\""))
+    )
+  }
+
+  @Test fun `@PartIterable with an empty Content-Type`() = runHttpTest {
+    val service = MultipartTestService(
+      BASE_URL,
+      httpClient,
+      listOf(JsonBodySerializer(contentTypeMatcher = { true }))
+    )
+
+    service.stringPartIterableWithEmptyContentType(listOf("12345"))
+
+    httpLog.single().assertHasMultipartContent(
+      "mixed",
+      listOf(TextPart(null, JSON, "\"12345\""))
+    )
+  }
+
+  @Test fun `@PartMap without a Content-Type`() = runHttpTest {
+    val service = MultipartTestService(
+      BASE_URL,
+      httpClient,
+      listOf(JsonBodySerializer(contentTypeMatcher = { true }))
+    )
+
+    service.stringPartMapWithoutContentType(mapOf("f" to "12345"))
+
+    httpLog.single().assertHasMultipartContent(
+      "mixed",
+      listOf(TextPart("f", JSON, "\"12345\""))
+    )
+  }
+
+  @Test fun `@PartMap with an empty Content-Type`() = runHttpTest {
+    val service = MultipartTestService(
+      BASE_URL,
+      httpClient,
+      listOf(JsonBodySerializer(contentTypeMatcher = { true }))
+    )
+
+    service.stringPartMapWithEmptyContentType(mapOf("f" to "12345"))
+
+    httpLog.single().assertHasMultipartContent(
+      "mixed",
+      listOf(TextPart("f", JSON, "\"12345\""))
     )
   }
 }
