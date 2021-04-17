@@ -40,7 +40,7 @@ class InterceptorsTest {
     val service = InterceptorsTestService(
       BASE_URL,
       httpClient,
-      httpBodySerializers = listOf(JsonBodySerializer),
+      httpBodySerializers = listOf(JsonBodySerializer()),
       httpInterceptors = listOf(
         createInterceptor("first"),
         createInterceptor("second")
@@ -77,7 +77,7 @@ class InterceptorsTest {
     val service = InterceptorsTestService(
       BASE_URL,
       httpClient,
-      httpBodySerializers = listOf(JsonBodySerializer),
+      httpBodySerializers = listOf(JsonBodySerializer()),
       httpInterceptors = listOf(interceptor)
     )
 
@@ -107,7 +107,7 @@ class InterceptorsTest {
     val service = InterceptorsTestService(
       BASE_URL,
       httpClient,
-      httpBodySerializers = listOf(JsonBodySerializer),
+      httpBodySerializers = listOf(JsonBodySerializer()),
       httpInterceptors = listOf(interceptor)
     )
 

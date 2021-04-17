@@ -153,16 +153,6 @@ internal class ServiceParser(logger: KSPLogger) {
       logger.error("Multiple @Body parameters are not allowed.", this)
     }
     bodyAnnotations.forEach { bodyAnnotation ->
-      if (bodyAnnotation.contentType.isNotEmpty()) {
-        try {
-          ContentType.parse(bodyAnnotation.contentType)
-        } catch (badFormatException: BadContentTypeFormatException) {
-          logger.error(
-            "Invalid Content-Type format: '${bodyAnnotation.contentType}'.",
-            bodyAnnotation.annotation
-          )
-        }
-      }
       httpMethodAnnotations.forEach { httpMethodAnnotation ->
         if (!httpMethodAnnotation.isBodyAllowed) {
           logger.error(
@@ -558,7 +548,7 @@ internal class ServiceParser(logger: KSPLogger) {
         }
 
         if (isPartData) {
-          if (contentType?.isNotEmpty() == true) {
+          if (contentType != null) {
             logger.error(
               if (partAnnotation is HttpParameterAnnotation.Part.Iterable) {
                 "@PartIterable must not define a 'contentType' when the parts are of type PartData."
@@ -598,17 +588,6 @@ internal class ServiceParser(logger: KSPLogger) {
 
         // Parameter type is NOT PartData
 
-        if (contentType.isNullOrBlank()) {
-          logger.error(
-            if (partAnnotation is HttpParameterAnnotation.Part.Iterable) {
-              "@PartIterable must provide a non-blank 'contentType' or use parts of type PartData."
-            } else {
-              "@Part must provide a non-blank 'contentType' or use PartData as the parameter type."
-            },
-            partAnnotation.annotation
-          )
-        }
-
         if (isMultipartForm && formFieldName.isNullOrBlank()) {
           logger.error(
             if (partAnnotation is HttpParameterAnnotation.Part.Iterable) {
@@ -620,7 +599,7 @@ internal class ServiceParser(logger: KSPLogger) {
           )
         }
         val partMetadata = ServiceDescription.HttpContent.Multipart.PartMetadata(
-          contentType = contentType ?: return@mapNotNull null,
+          contentType = contentType,
           formFieldName = formFieldName
         )
         when (partAnnotation) {
@@ -641,7 +620,7 @@ internal class ServiceParser(logger: KSPLogger) {
     val bodyContentType = bodyAnnotations.getOrNull(0)?.contentType
 
     fun content(): ServiceDescription.HttpContent? = when {
-      bodyParameterName != null && bodyContentType != null -> ServiceDescription.HttpContent.Body(
+      bodyParameterName != null -> ServiceDescription.HttpContent.Body(
         valueProviderParameter = bodyParameterName,
         contentType = bodyContentType
       )
@@ -905,13 +884,23 @@ internal class ServiceParser(logger: KSPLogger) {
   }
 
   private fun KSValueParameter.findHttpParameterAnnotations(): List<HttpParameterAnnotation> {
+    fun validateContentType(contentType: String, annotation: KSAnnotation): String? {
+      if (contentType.isEmpty()) return null
+      try {
+        ContentType.parse(contentType)
+      } catch (badFormatException: BadContentTypeFormatException) {
+        logger.error("Invalid Content-Type format: '$contentType'", annotation)
+      }
+      return contentType
+    }
+
     return annotations.mapNotNull { annotation ->
       when (annotation.shortName.asString()) {
         "Body" -> {
           val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-          val contentType = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
+          val contentType = annotation.arguments.getOrNull(0)?.value as? String ?: ""
           HttpParameterAnnotation.Body(
-            contentType = contentType,
+            contentType = validateContentType(contentType, annotation),
             parameter = this,
             annotation = annotation,
             annotationType = resolvedAnnotationType
@@ -960,13 +949,14 @@ internal class ServiceParser(logger: KSPLogger) {
           val contentType = annotation.arguments
             .find { it.name?.asString() == "contentType" }
             ?.value as? String
+            ?: ""
 
           val formFieldName = annotation.arguments
             .find { it.name?.asString() == "formFieldName" }
             ?.value as? String
 
           HttpParameterAnnotation.Part.Single(
-            contentType = contentType,
+            contentType = validateContentType(contentType, annotation),
             formFieldName = formFieldName,
             parameter = this,
             annotation = annotation,
@@ -979,13 +969,14 @@ internal class ServiceParser(logger: KSPLogger) {
           val contentType = annotation.arguments
             .find { it.name?.asString() == "contentType" }
             ?.value as? String
+            ?: ""
 
           val formFieldName = annotation.arguments
             .find { it.name?.asString() == "formFieldName" }
             ?.value as? String
 
           HttpParameterAnnotation.Part.Iterable(
-            contentType = contentType,
+            contentType = validateContentType(contentType, annotation),
             formFieldName = formFieldName,
             parameter = this,
             annotation = annotation,
@@ -994,9 +985,9 @@ internal class ServiceParser(logger: KSPLogger) {
         }
         "PartMap" -> {
           val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-          val contentType = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
+          val contentType = annotation.arguments.getOrNull(0)?.value as? String ?: ""
           HttpParameterAnnotation.Part.Map(
-            contentType = contentType,
+            contentType = validateContentType(contentType, annotation),
             parameter = this,
             annotation = annotation,
             annotationType = resolvedAnnotationType
@@ -1474,7 +1465,7 @@ private sealed class HttpParameterAnnotation {
   abstract val annotationType: KSType
 
   data class Body(
-    val contentType: String,
+    val contentType: String?,
     override val parameter: KSValueParameter,
     override val annotation: KSAnnotation,
     override val annotationType: KSType
@@ -1528,7 +1519,7 @@ private sealed class HttpParameterAnnotation {
     ) : HttpParameterAnnotation.Part()
 
     data class Map(
-      val contentType: String,
+      val contentType: String?,
       override val parameter: KSValueParameter,
       override val annotation: KSAnnotation,
       override val annotationType: KSType

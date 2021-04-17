@@ -104,7 +104,7 @@ private val BASE_URL = Url("https://name/collisions/")
 
 class NameCollisionsTest {
   @Test fun `Name collisions are tolerated`() = runHttpTest {
-    val service = NameCollisionsTestService(BASE_URL, httpClient, listOf(JsonBodySerializer))
+    val service = NameCollisionsTestService(BASE_URL, httpClient, listOf(JsonBodySerializer()))
 
     httpRequestHandler { respondJson("\"result\"") }
 

@@ -7,14 +7,14 @@ import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 
 public interface HttpBodySerializer {
-  public fun canWrite(contentType: ContentType): Boolean
+  public fun canWrite(contentType: ContentType?): Boolean
 
   public fun canRead(contentType: ContentType?): Boolean
 
   public fun <T> write(
     serializationStrategy: SerializationStrategy<T>,
     body: T,
-    contentType: ContentType
+    contentType: ContentType?
   ): OutgoingContent
 
   public suspend fun <T> read(
