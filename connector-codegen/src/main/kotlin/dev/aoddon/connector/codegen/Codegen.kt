@@ -1377,21 +1377,22 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           override suspend fun proceedWith(request: %T): %T {
             this.request = request
             return try {
-              if (++index < $interceptorsParameterName.size) with($interceptorsParameterName[index]) { intercept() } else {
+              if (++index < $interceptorsParameterName.size) %M($interceptorsParameterName[index]) { intercept() } else {
                 val builder = request.%M()
                 val call = $clientParameterName.requestPipeline.execute(builder, builder.body) as %T
-                with(call.response) {
+                %M(call.response) {
+                  val responseBody = %M()
                   dispose = {
                     val job = coroutineContext[%T] as %T
                     job.complete()
-                    %M { content.cancel(null) }
+                    %M { responseBody.cancel(null) }
                     job.join()
                   }
                   when (status.value) {
                     in (200..299) -> request.%M(
                       status = status,
                       headers = headers,
-                      body = content,
+                      body = responseBody,
                       protocol = version,
                       timestamp = responseTime.timestamp,
                       requestTimestamp = requestTime.timestamp
@@ -1399,7 +1400,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
                     else -> request.%M(
                       status = status,
                       headers = headers,
-                      body = content.%M().%M(),
+                      body = responseBody.%M().%M(),
                       protocol = version,
                       timestamp = responseTime.timestamp,
                       requestTimestamp = requestTime.timestamp
@@ -1422,8 +1423,11 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         ClassNames.HTTP_REQUEST,
         ClassNames.HTTP_REQUEST,
         httpResultParameterized,
+        MemberName("kotlin", "with"),
         MemberName(packageName, FunctionNames.TO_HTTP_REQUEST_BUILDER),
         ClassNames.Ktor.HTTP_CLIENT_CALL,
+        MemberName("kotlin", "with"),
+        MemberName("io.ktor.client.statement", "bodyAsChannel"),
         ClassNames.JOB,
         ClassNames.COMPLETABLE_JOB,
         MemberName("kotlin", "runCatching"),
@@ -1449,13 +1453,14 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
           method·=·this@${FunctionNames.TO_HTTP_REQUEST_BUILDER}.method
           url.%M(this@${FunctionNames.TO_HTTP_REQUEST_BUILDER}.url)
           headers.appendAll(this@${FunctionNames.TO_HTTP_REQUEST_BUILDER}.headers)
-          body·=·bodySupplier()
+          %M(bodySupplier())
           %M·=·false
         }
         """.trimIndent(),
         ClassNames.Ktor.HTTP_REQUEST_BUILDER,
         MemberName("kotlin", "apply"),
         MemberName("io.ktor.http", "takeFrom"),
+        MemberName("io.ktor.client.request", "setBody"),
         MemberName("io.ktor.client.features", "expectSuccess")
       )
       .build()

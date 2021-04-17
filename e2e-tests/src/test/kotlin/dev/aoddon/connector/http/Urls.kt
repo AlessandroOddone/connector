@@ -5,7 +5,6 @@ import dev.aoddon.connector.URL
 import dev.aoddon.connector.test.util.assertThrows
 import dev.aoddon.connector.util.assertHttpLogMatches
 import dev.aoddon.connector.util.runHttpTest
-import io.ktor.client.request.forms.submitFormWithBinaryData
 import io.ktor.http.Headers
 import io.ktor.http.Parameters
 import io.ktor.http.ParametersBuilder
@@ -235,8 +234,6 @@ class UrlsTest {
     val service = UrlsTestService(BASE_URL, httpClient)
     service.relativePath()
     assertHttpLogMatches { hasUrl("https://urls/base/relative/path") }
-
-    httpClient.submitFormWithBinaryData { }
   }
 
   @Test fun `Absolute path`() = runHttpTest {
