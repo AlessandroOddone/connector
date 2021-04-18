@@ -227,27 +227,36 @@ internal class ServiceParser(logger: KSPLogger) {
       .groupBy { it.name }
 
     httpMethodAnnotations.forEach { httpMethodAnnotation ->
-      val urlTemplate = httpMethodAnnotation.urlTemplate
-      val urlTemplateParameters = urlTemplate?.let { URL_TEMPLATE_PARAMETER_REGEX.findAll(it) }
-      val questionMarkIndex = urlTemplate?.indexOf('?') ?: -1
+      val (path, afterPath) = httpMethodAnnotation.urlTemplate
+        ?.split("?", limit = 2)
+        .orEmpty()
+        .run { getOrNull(0) to getOrNull(1) }
 
-      val dynamicQueryParameters = mutableListOf<String>()
-      val expectedPathParameterNames = urlTemplateParameters
-        ?.filter { matchResult ->
-          if (questionMarkIndex >= 0 && matchResult.range.first > questionMarkIndex) {
-            dynamicQueryParameters.add(matchResult.value)
-            return@filter false
-          }
-          return@filter true
-        }
+      val (query, fragment) = afterPath
+        ?.split("#", limit = 2)
+        .orEmpty()
+        .run { getOrNull(0) to getOrNull(1) }
+
+      val pathTemplateParameters = path?.let { URL_TEMPLATE_PARAMETER_REGEX.findAll(path) }
+      val expectedPathParameterNames = pathTemplateParameters
         ?.map { it.value.removeSurrounding(prefix = "{", suffix = "}") }
         .orEmpty()
         .toMutableSet()
 
-      if (dynamicQueryParameters.isNotEmpty()) {
+      val queryStringTemplateParameters = query?.let { URL_TEMPLATE_PARAMETER_REGEX.findAll(query) }?.toList()
+      if (queryStringTemplateParameters?.isNotEmpty() == true) {
         logger.error(
           "Dynamic query parameters must be provided via @Query function parameters. " +
-            "Found in the query string: ${dynamicQueryParameters.joinToString()}",
+            "Found in the query string: ${queryStringTemplateParameters.joinToString { it.value }}",
+          httpMethodAnnotation.annotation
+        )
+      }
+
+      val fragmentTemplateParameters = fragment?.let { URL_TEMPLATE_PARAMETER_REGEX.findAll(fragment) }?.toList()
+      if (fragmentTemplateParameters?.isNotEmpty() == true) {
+        logger.error(
+          "Dynamic parameters are not allowed in the URL fragment. " +
+            "Found: ${fragmentTemplateParameters.joinToString { it.value }}",
           httpMethodAnnotation.annotation
         )
       }
@@ -269,7 +278,7 @@ internal class ServiceParser(logger: KSPLogger) {
         } else if (!expectedPathParameterNames.contains(name)) {
           occurrences.forEach { pathAnnotation ->
             logger.error(
-              "@${httpMethodAnnotation.name} URL does not define a dynamic path parameter matching '$name'.",
+              "@${httpMethodAnnotation.name} URL path does not define a dynamic parameter matching '$name'.",
               pathAnnotation.annotation
             )
           }
