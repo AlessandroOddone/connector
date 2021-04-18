@@ -5,7 +5,7 @@ import dev.aoddon.connector.util.runTestCompilation
 import org.junit.Test
 
 class UrlsValidationTest {
-  @Test fun `Dynamic query parameters in the relative URL are not allowed`() {
+  @Test fun `URL template parameters are only allowed in the path`() {
     val sourceFile = SourceFile.kotlin(
       "Test.kt",
       """
@@ -15,9 +15,11 @@ class UrlsValidationTest {
       import dev.aoddon.connector.http.*
 
       @Service interface TestApi {
-        @GET("get?param1={p1}&param2={p2}") suspend fun get(
+        @GET("get?param1={p1}&param2={p2}#{p3}abc{p4}123") suspend fun get(
           @Query("p1") p1: String,
-          @Query("p2") p2: String
+          @Query("p2") p2: String,
+          @Path("p3") p3: String,
+          @Path("p4") p4: String
         ): String
       }
       """
@@ -26,12 +28,15 @@ class UrlsValidationTest {
     sourceFile.runTestCompilation {
       assertKspErrors(
         "Dynamic query parameters must be provided via @Query function parameters. " +
-          "Found in the query string: {p1}, {p2}" atLine 7
+          "Found in the query string: {p1}, {p2}" atLine 7,
+        "Dynamic parameters are not allowed in the URL fragment. Found: {p3}, {p4}" atLine 7,
+        "@GET URL path does not define a dynamic parameter matching 'p3'." atLine 10,
+        "@GET URL path does not define a dynamic parameter matching 'p4'." atLine 11
       )
     }
   }
 
-  @Test fun `@Path name must match a parameter in the URL template`() {
+  @Test fun `@Path name must match a path parameter in the URL template`() {
     val sourceFile = SourceFile.kotlin(
       "Test.kt",
       """
@@ -49,8 +54,8 @@ class UrlsValidationTest {
 
     sourceFile.runTestCompilation {
       assertKspErrors(
-        "@GET URL does not define a dynamic path parameter matching 'id'." atLine 7,
-        "@HTTP URL does not define a dynamic path parameter matching 'p'." atLine 8
+        "@GET URL path does not define a dynamic parameter matching 'id'." atLine 7,
+        "@HTTP URL path does not define a dynamic parameter matching 'p'." atLine 8
       )
     }
   }
@@ -71,7 +76,7 @@ class UrlsValidationTest {
     )
 
     sourceFile.runTestCompilation {
-      assertKspErrors("@GET URL does not define a dynamic path parameter matching 'id'." atLine 7)
+      assertKspErrors("@GET URL path does not define a dynamic parameter matching 'id'." atLine 7)
     }
   }
 
