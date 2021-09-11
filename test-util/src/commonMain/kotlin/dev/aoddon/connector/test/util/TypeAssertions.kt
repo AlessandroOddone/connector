@@ -7,6 +7,6 @@ public inline fun <reified T> assertIs(actual: Any?) {
   contract { returns() implies (actual is T) }
   assertTrue(
     actual is T,
-    "Expected an instance of '${with(T::class) { qualifiedName ?: simpleName }}'. Found: $actual."
+    "Expected an instance of '${T::class.simpleName}'. Found: $actual."
   )
 }

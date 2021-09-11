@@ -7,7 +7,6 @@ import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSTypeArgument
 import com.google.devtools.ksp.symbol.KSTypeReference
-import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.symbol.Nullability
 import com.google.devtools.ksp.symbol.Variance
 import com.squareup.kotlinpoet.ClassName
@@ -74,12 +73,7 @@ private fun KSTypeReference.collectTypeInfo(
       val typeName = LambdaTypeName.get(receiver, parameters, returnType)
         .copy(
           nullable = ksType.nullability == Nullability.NULLABLE,
-          suspending = modifiers.contains(Modifier.SUSPEND) ||
-            // Check resolved type name since we can't retrieve the SUSPEND modifier when the lambda is nullable
-            // (https://github.com/google/ksp/issues/354)
-            ksType.declaration.qualifiedName?.asString()
-            ?.split("kotlin.coroutines.SuspendFunction")
-            ?.let { splits -> splits.size == 2 && splits.last().toIntOrNull() != null } == true
+          suspending = ksType.isSuspendFunctionType
         )
 
       return TypeInfo(
@@ -134,7 +128,7 @@ internal data class TypeInfo(
   val arguments: List<TypeInfo>,
   val ksTypeArgument: KSTypeArgument?
 ) {
-  val qualifiedName = ksType?.declaration?.qualifiedName?.asString()
+  private val qualifiedName = ksType?.declaration?.qualifiedName?.asString()
   val isSupportedIterable = SUPPORTED_ITERABLE_QUALIFIED_NAMES.contains(qualifiedName)
   val isSupportedMap = SUPPORTED_MAP_QUALIFIED_NAMES.contains(qualifiedName)
   val isSupportedKtorStringValues = SUPPORTED_STRING_VALUES_QUALIFIED_NAMES.contains(qualifiedName)

@@ -4,22 +4,30 @@ plugins {
 }
 
 dependencies {
-  kspTest(project(":connector-processor"))
-  testImplementation(project(":connector-processor"))
-  testImplementation(project(":connector-runtime-http"))
-  testImplementation(project(":test-util"))
-  testImplementation(Dependencies.KOTLIN_COMPILE_TESTING)
-  testImplementation(Dependencies.KSP)
-  testImplementation(Dependencies.Ktor.CLIENT_LOGGING)
-  testImplementation(Dependencies.Ktor.CLIENT_MOCK)
-  testImplementation(Dependencies.KotlinX.Serialization.JSON_JVM)
+  ksp(project(":connector-processor"))
 }
 
-sourceSets {
-  test {
-    java {
-      // Needed until this issue is fully solved: https://github.com/android/kotlin/issues/7
-      srcDir(file("build/generated/ksp/test/kotlin"))
+kotlin.sourceSets {
+  commonTest {
+    dependencies {
+      implementation(project(":connector-runtime-http"))
+      implementation(project(":test-util"))
+      implementation(Dependencies.Ktor.CLIENT_LOGGING)
+      implementation(Dependencies.Ktor.CLIENT_MOCK)
+      implementation(Dependencies.KotlinX.Serialization.JSON)
+    }
+  }
+
+  jvmTest {
+    dependencies {
+      implementation(project(":connector-processor"))
+      implementation(Dependencies.KOTLIN_COMPILE_TESTING)
+    }
+  }
+
+  all {
+    languageSettings {
+      optIn("kotlinx.serialization.ExperimentalSerializationApi")
     }
   }
 }
