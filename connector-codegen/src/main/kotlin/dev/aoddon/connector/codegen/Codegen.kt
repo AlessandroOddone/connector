@@ -212,6 +212,13 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
       else -> name
     }
 
+    fun nestedThisProperty(memberName: MemberName): CodeBlock = buildCodeBlock {
+      when {
+        parameters.containsKey(memberName.simpleName) -> add("this.%M", memberName)
+        else -> add("%M", memberName)
+      }
+    }
+
     fun serviceClassProperty(name: String, isNestedThis: Boolean = false): String = when {
       !parameters.containsKey(name) -> name
       isNestedThis -> "this@$implementationClassName.$name"
@@ -288,7 +295,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
               )
               addStatement(
                 "%L·= %L.%M()",
-                nestedThisProperty("encodedPath"),
+                nestedThisProperty(MemberName("io.ktor.http", "encodedPath")),
                 "\"$path\"",
                 MemberName("io.ktor.http", "encodeURLPath")
               )
@@ -319,7 +326,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
               )
               addStatement(
                 "%L·+= %L.%M()",
-                nestedThisProperty("encodedPath"),
+                nestedThisProperty(MemberName("io.ktor.http", "encodedPath")),
                 "\"$path\"",
                 MemberName("io.ktor.http", "encodeURLPath")
               )
@@ -1461,7 +1468,7 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
         MemberName("kotlin", "apply"),
         MemberName("io.ktor.http", "takeFrom"),
         MemberName("io.ktor.client.request", "setBody"),
-        MemberName("io.ktor.client.features", "expectSuccess")
+        MemberName("io.ktor.client.plugins", "expectSuccess")
       )
       .build()
   }
@@ -1628,7 +1635,8 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
             ParameterNames.BASE_URL,
           )
           addStatement(
-            "encodedPath·= path.%M()",
+            "%M·= path.%M()",
+            MemberName("io.ktor.http", "encodedPath"),
             MemberName("io.ktor.http", "encodeURLPath")
           )
           endControlFlow()
@@ -1649,7 +1657,8 @@ private class ServiceCodeGenerator(private val serviceDescription: ServiceDescri
             ParameterNames.BASE_URL,
           )
           addStatement(
-            "encodedPath·+= path.%M()",
+            "%M·+= path.%M()",
+            MemberName("io.ktor.http", "encodedPath"),
             MemberName("io.ktor.http", "encodeURLPath")
           )
           endControlFlow()

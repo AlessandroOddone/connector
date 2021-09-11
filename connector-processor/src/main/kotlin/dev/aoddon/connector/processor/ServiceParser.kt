@@ -44,7 +44,7 @@ internal class ServiceParser(logger: KSPLogger) {
       logger.error("@Service target must be a top-level interface.", classDeclaration)
     }
 
-    if (superTypes.isNotEmpty()) {
+    if (superTypes.any()) {
       logger.error("@Service interfaces cannot have supertypes.", classDeclaration)
     }
 
@@ -62,6 +62,7 @@ internal class ServiceParser(logger: KSPLogger) {
           ?.takeIf { !it.isConstructor() }
           ?.parseServiceFunction()
       }
+      .toList()
 
     if (logger.hasErrors) {
       null
@@ -567,7 +568,7 @@ internal class ServiceParser(logger: KSPLogger) {
               partAnnotation.annotation
             )
           }
-          if (formFieldName?.isNotEmpty() == true) {
+          if (formFieldName != null) {
             logger.error(
               if (partAnnotation is HttpParameterAnnotation.Part.Iterable) {
                 "@PartIterable must not define a 'formFieldName' when the parts are of type PartData."
@@ -597,12 +598,12 @@ internal class ServiceParser(logger: KSPLogger) {
 
         // Parameter type is NOT PartData
 
-        if (isMultipartForm && formFieldName.isNullOrBlank()) {
+        if (isMultipartForm && formFieldName == null) {
           logger.error(
             if (partAnnotation is HttpParameterAnnotation.Part.Iterable) {
-              "When the @Multipart subtype is 'form-data' (the default), @PartIterable must provide a non-blank 'formFieldName' or use parts of type PartData."
+              "When the @Multipart subtype is 'form-data' (the default), @PartIterable must provide a 'formFieldName' or use parts of type PartData."
             } else {
-              "When the @Multipart subtype is 'form-data' (the default), @Part must provide a non-blank 'formFieldName' or use PartData as the parameter type."
+              "When the @Multipart subtype is 'form-data' (the default), @Part must provide a 'formFieldName' or use PartData as the parameter type."
             },
             partAnnotation.annotation
           )
@@ -765,64 +766,72 @@ internal class ServiceParser(logger: KSPLogger) {
   }
 
   private fun KSFunctionDeclaration.findHttpMethodAnnotations(): List<HttpMethodAnnotation> {
-    return annotations.mapNotNull { annotation ->
-      val annotationName = annotation.shortName.asString()
-      val method = when (annotationName) {
-        "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT" -> annotationName
+    return annotations
+      .mapNotNull { annotation ->
+        val annotationName = annotation.shortName.asString()
+        val method = when (annotationName) {
+          "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT" -> annotationName
 
-        "HTTP" ->
-          annotation.arguments
-            .find { it.name?.asString() == "method" }
-            ?.value as? String
-            ?: return@mapNotNull null
+          "HTTP" ->
+            annotation.arguments
+              .find { it.name?.asString() == "method" }
+              ?.value as? String
+              ?: return@mapNotNull null
 
-        else -> return@mapNotNull null
+          else -> return@mapNotNull null
+        }
+        val isBodyAllowed = annotationName != "DELETE" &&
+          annotationName != "GET" &&
+          annotationName != "HEAD" &&
+          annotationName != "OPTIONS"
+
+        val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+
+        val urlTemplate = annotation.arguments
+          .find { it.name?.asString() == "url" }
+          ?.let { it.value as? String }
+          ?.takeIf { it.isNotEmpty() }
+
+        HttpMethodAnnotation(
+          isBodyAllowed = isBodyAllowed,
+          method = method,
+          name = annotationName,
+          urlTemplate = urlTemplate,
+          annotation = annotation,
+          annotationType = resolvedAnnotationType
+        )
       }
-      val isBodyAllowed = annotationName != "DELETE" &&
-        annotationName != "GET" &&
-        annotationName != "HEAD" &&
-        annotationName != "OPTIONS"
-
-      val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-
-      val urlTemplate: String? = annotation.arguments.find { it.name?.asString() == "url" }?.let { urlArgument ->
-        urlArgument.value as? String ?: return@let null
-      }
-      HttpMethodAnnotation(
-        isBodyAllowed = isBodyAllowed,
-        method = method,
-        name = annotationName,
-        urlTemplate = urlTemplate,
-        annotation = annotation,
-        annotationType = resolvedAnnotationType
-      )
-    }
+      .toList()
   }
 
   private fun KSFunctionDeclaration.findFormUrlEncodedAnnotations(): List<FormUrlEncodedAnnotation> {
-    return annotations.mapNotNull { annotation ->
-      when (annotation.shortName.asString()) {
-        "FormUrlEncoded" -> annotation.resolveConnectorHttpAnnotation()?.let { type ->
-          FormUrlEncodedAnnotation(annotation, type)
+    return annotations
+      .mapNotNull { annotation ->
+        when (annotation.shortName.asString()) {
+          "FormUrlEncoded" -> annotation.resolveConnectorHttpAnnotation()?.let { type ->
+            FormUrlEncodedAnnotation(annotation, type)
+          }
+          else -> null
         }
-        else -> null
       }
-    }
+      .toList()
   }
 
   private fun KSFunctionDeclaration.findMultipartAnnotations(): List<MultipartAnnotation> {
-    return annotations.mapNotNull { annotation ->
-      when (annotation.shortName.asString()) {
-        "Multipart" -> annotation.resolveConnectorHttpAnnotation()?.let { type ->
-          MultipartAnnotation(
-            subtype = annotation.arguments.getOrNull(0)?.value as? String ?: "form-data",
-            annotation = annotation,
-            annotationType = type
-          )
+    return annotations
+      .mapNotNull { annotation ->
+        when (annotation.shortName.asString()) {
+          "Multipart" -> annotation.resolveConnectorHttpAnnotation()?.let { type ->
+            MultipartAnnotation(
+              subtype = annotation.arguments.getOrNull(0)?.value as? String ?: "form-data",
+              annotation = annotation,
+              annotationType = type
+            )
+          }
+          else -> null
         }
-        else -> null
       }
-    }
+      .toList()
   }
 
   // Logs an error at 'node' if 'name' is NOT a valid header name.
@@ -832,7 +841,7 @@ internal class ServiceParser(logger: KSPLogger) {
     } catch (e: IllegalHeaderNameException) {
       logger.error(
         "Header name contains the illegal character '${name[e.position].toString().escape()}' " +
-          "(code ${(name[e.position].toInt() and 0xff)})",
+          "(code ${(name[e.position].code and 0xff)})",
         node
       )
     }
@@ -845,7 +854,7 @@ internal class ServiceParser(logger: KSPLogger) {
     } catch (e: IllegalHeaderValueException) {
       logger.error(
         "Header value contains the illegal character '${value[e.position].toString().escape()}' " +
-          "(code ${(value[e.position].toInt() and 0xff)})",
+          "(code ${(value[e.position].code and 0xff)})",
         node
       )
     }
@@ -903,160 +912,164 @@ internal class ServiceParser(logger: KSPLogger) {
       return contentType
     }
 
-    return annotations.mapNotNull { annotation ->
-      when (annotation.shortName.asString()) {
-        "Body" -> {
-          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-          val contentType = annotation.arguments.getOrNull(0)?.value as? String ?: ""
-          HttpParameterAnnotation.Body(
-            contentType = validateContentType(contentType, annotation),
-            parameter = this,
-            annotation = annotation,
-            annotationType = resolvedAnnotationType
-          )
-        }
-        "Field" -> {
-          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-          val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
-          HttpParameterAnnotation.Field.Single(
-            name = name,
-            parameter = this,
-            annotation = annotation,
-            annotationType = resolvedAnnotationType
-          )
-        }
-        "FieldMap" -> {
-          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-          HttpParameterAnnotation.Field.Map(
-            parameter = this,
-            annotation = annotation,
-            annotationType = resolvedAnnotationType
-          )
-        }
-        "Header" -> {
-          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-          val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
-          validateHeaderName(name, annotation)
-          HttpParameterAnnotation.Header.Single(
-            name = name,
-            parameter = this,
-            annotation = annotation,
-            annotationType = resolvedAnnotationType
-          )
-        }
-        "HeaderMap" -> {
-          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-          HttpParameterAnnotation.Header.Map(
-            parameter = this,
-            annotation = annotation,
-            annotationType = resolvedAnnotationType
-          )
-        }
-        "Part" -> {
-          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+    return annotations
+      .mapNotNull { annotation ->
+        when (annotation.shortName.asString()) {
+          "Body" -> {
+            val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+            val contentType = annotation.arguments.getOrNull(0)?.value as? String ?: ""
+            HttpParameterAnnotation.Body(
+              contentType = validateContentType(contentType, annotation),
+              parameter = this,
+              annotation = annotation,
+              annotationType = resolvedAnnotationType
+            )
+          }
+          "Field" -> {
+            val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+            val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
+            HttpParameterAnnotation.Field.Single(
+              name = name,
+              parameter = this,
+              annotation = annotation,
+              annotationType = resolvedAnnotationType
+            )
+          }
+          "FieldMap" -> {
+            val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+            HttpParameterAnnotation.Field.Map(
+              parameter = this,
+              annotation = annotation,
+              annotationType = resolvedAnnotationType
+            )
+          }
+          "Header" -> {
+            val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+            val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
+            validateHeaderName(name, annotation)
+            HttpParameterAnnotation.Header.Single(
+              name = name,
+              parameter = this,
+              annotation = annotation,
+              annotationType = resolvedAnnotationType
+            )
+          }
+          "HeaderMap" -> {
+            val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+            HttpParameterAnnotation.Header.Map(
+              parameter = this,
+              annotation = annotation,
+              annotationType = resolvedAnnotationType
+            )
+          }
+          "Part" -> {
+            val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
 
-          val contentType = annotation.arguments
-            .find { it.name?.asString() == "contentType" }
-            ?.value as? String
-            ?: ""
+            val contentType = annotation.arguments
+              .find { it.name?.asString() == "contentType" }
+              ?.value as? String
+              ?: ""
 
-          val formFieldName = annotation.arguments
-            .find { it.name?.asString() == "formFieldName" }
-            ?.value as? String
+            val formFieldName = annotation.arguments
+              .find { it.name?.asString() == "formFieldName" }
+              ?.let { it.value as? String }
+              ?.takeIf { it.isNotEmpty() }
 
-          HttpParameterAnnotation.Part.Single(
-            contentType = validateContentType(contentType, annotation),
-            formFieldName = formFieldName,
-            parameter = this,
-            annotation = annotation,
-            annotationType = resolvedAnnotationType
-          )
-        }
-        "PartIterable" -> {
-          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+            HttpParameterAnnotation.Part.Single(
+              contentType = validateContentType(contentType, annotation),
+              formFieldName = formFieldName,
+              parameter = this,
+              annotation = annotation,
+              annotationType = resolvedAnnotationType
+            )
+          }
+          "PartIterable" -> {
+            val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
 
-          val contentType = annotation.arguments
-            .find { it.name?.asString() == "contentType" }
-            ?.value as? String
-            ?: ""
+            val contentType = annotation.arguments
+              .find { it.name?.asString() == "contentType" }
+              ?.value as? String
+              ?: ""
 
-          val formFieldName = annotation.arguments
-            .find { it.name?.asString() == "formFieldName" }
-            ?.value as? String
+            val formFieldName = annotation.arguments
+              .find { it.name?.asString() == "formFieldName" }
+              ?.let { it.value as? String }
+              ?.takeIf { it.isNotEmpty() }
 
-          HttpParameterAnnotation.Part.Iterable(
-            contentType = validateContentType(contentType, annotation),
-            formFieldName = formFieldName,
-            parameter = this,
-            annotation = annotation,
-            annotationType = resolvedAnnotationType
-          )
+            HttpParameterAnnotation.Part.Iterable(
+              contentType = validateContentType(contentType, annotation),
+              formFieldName = formFieldName,
+              parameter = this,
+              annotation = annotation,
+              annotationType = resolvedAnnotationType
+            )
+          }
+          "PartMap" -> {
+            val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+            val contentType = annotation.arguments.getOrNull(0)?.value as? String ?: ""
+            HttpParameterAnnotation.Part.Map(
+              contentType = validateContentType(contentType, annotation),
+              parameter = this,
+              annotation = annotation,
+              annotationType = resolvedAnnotationType
+            )
+          }
+          "Path" -> {
+            val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+            val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
+            HttpParameterAnnotation.Path(
+              name = name,
+              parameter = this,
+              annotation = annotation,
+              annotationType = resolvedAnnotationType
+            )
+          }
+          "Query" -> {
+            val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+            val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
+            HttpParameterAnnotation.Query.Single(
+              name = name,
+              parameter = this,
+              annotation = annotation,
+              annotationType = resolvedAnnotationType
+            )
+          }
+          "QueryMap" -> {
+            val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+            HttpParameterAnnotation.Query.Map(
+              parameter = this,
+              annotation = annotation,
+              annotationType = resolvedAnnotationType
+            )
+          }
+          "QueryName" -> {
+            val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+            HttpParameterAnnotation.Query.Name(
+              parameter = this,
+              annotation = annotation,
+              annotationType = resolvedAnnotationType
+            )
+          }
+          "Streaming" -> {
+            val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
+            HttpParameterAnnotation.Streaming(
+              parameter = this,
+              annotation = annotation,
+              annotationType = resolvedAnnotationType
+            )
+          }
+          "URL" -> {
+            val resolvedAnnotationType = annotation.resolveConnectorCoreAnnotation() ?: return@mapNotNull null
+            HttpParameterAnnotation.Url(
+              parameter = this,
+              annotation = annotation,
+              annotationType = resolvedAnnotationType
+            )
+          }
+          else -> null
         }
-        "PartMap" -> {
-          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-          val contentType = annotation.arguments.getOrNull(0)?.value as? String ?: ""
-          HttpParameterAnnotation.Part.Map(
-            contentType = validateContentType(contentType, annotation),
-            parameter = this,
-            annotation = annotation,
-            annotationType = resolvedAnnotationType
-          )
-        }
-        "Path" -> {
-          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-          val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
-          HttpParameterAnnotation.Path(
-            name = name,
-            parameter = this,
-            annotation = annotation,
-            annotationType = resolvedAnnotationType
-          )
-        }
-        "Query" -> {
-          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-          val name = annotation.arguments.getOrNull(0)?.value as? String ?: return@mapNotNull null
-          HttpParameterAnnotation.Query.Single(
-            name = name,
-            parameter = this,
-            annotation = annotation,
-            annotationType = resolvedAnnotationType
-          )
-        }
-        "QueryMap" -> {
-          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-          HttpParameterAnnotation.Query.Map(
-            parameter = this,
-            annotation = annotation,
-            annotationType = resolvedAnnotationType
-          )
-        }
-        "QueryName" -> {
-          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-          HttpParameterAnnotation.Query.Name(
-            parameter = this,
-            annotation = annotation,
-            annotationType = resolvedAnnotationType
-          )
-        }
-        "Streaming" -> {
-          val resolvedAnnotationType = annotation.resolveConnectorHttpAnnotation() ?: return@mapNotNull null
-          HttpParameterAnnotation.Streaming(
-            parameter = this,
-            annotation = annotation,
-            annotationType = resolvedAnnotationType
-          )
-        }
-        "URL" -> {
-          val resolvedAnnotationType = annotation.resolveConnectorCoreAnnotation() ?: return@mapNotNull null
-          HttpParameterAnnotation.Url(
-            parameter = this,
-            annotation = annotation,
-            annotationType = resolvedAnnotationType
-          )
-        }
-        else -> null
       }
-    }
+      .toList()
   }
 
   private enum class TypeValidationTarget(
@@ -1313,7 +1326,7 @@ internal class ServiceParser(logger: KSPLogger) {
           if (argumentTypeInfo.ksType.nullability == Nullability.NULLABLE) {
             logger.error(
               "Nullable 'kotlin.Unit' type argument is not allowed. Must be non-null.",
-              argumentTypeInfo.ksTypeArgument!!
+              targetNode
             )
           }
           return
@@ -1370,7 +1383,7 @@ internal class ServiceParser(logger: KSPLogger) {
         errorMessageBuilder.append(
           " or a built-in serializable type (${BUILT_IN_SERIALIZABLE_TYPES_QUALIFIED_NAMES.joinToString()})"
         )
-        logger.error(errorMessageBuilder.toString(), argumentTypeInfo.ksTypeArgument!!)
+        logger.error(errorMessageBuilder.toString(), targetNode)
       }
 
       parentTypeInfo.arguments.forEachIndexed { argumentIndex, argumentTypeInfo ->

@@ -2,9 +2,10 @@ package dev.aoddon.connector.processor
 
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
-import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
+import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
+import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import dev.aoddon.connector.codegen.toFileSpec
@@ -12,20 +13,19 @@ import io.ktor.utils.io.core.use
 import java.io.OutputStreamWriter
 import java.nio.charset.StandardCharsets.UTF_8
 
-public class ConnectorProcessor : SymbolProcessor {
-  private lateinit var codeGenerator: CodeGenerator
-  private lateinit var serviceParser: ServiceParser
-
-  override fun init(
-    options: Map<String, String>,
-    kotlinVersion: KotlinVersion,
-    codeGenerator: CodeGenerator,
-    logger: KSPLogger
-  ) {
-    this.codeGenerator = codeGenerator
-    this.serviceParser = ServiceParser(logger)
+public class ConnectorProcessorProvider : SymbolProcessorProvider {
+  override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor {
+    return ConnectorProcessor(
+      codeGenerator = environment.codeGenerator,
+      serviceParser = ServiceParser(environment.logger)
+    )
   }
+}
 
+private class ConnectorProcessor(
+  private val codeGenerator: CodeGenerator,
+  private val serviceParser: ServiceParser
+) : SymbolProcessor {
   override fun process(resolver: Resolver): List<KSAnnotated> {
     resolver
       .getSymbolsWithAnnotation(SERVICE_ANNOTATION_QUALIFIED_NAME)

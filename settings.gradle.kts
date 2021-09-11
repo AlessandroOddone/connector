@@ -1,13 +1,9 @@
 rootProject.name = "connector"
 
-enableFeaturePreview("GRADLE_METADATA")
-
 pluginManagement {
   repositories {
-    gradlePluginPortal()
-    google()
-    jcenter()
     mavenCentral()
+    gradlePluginPortal()
   }
 }
 

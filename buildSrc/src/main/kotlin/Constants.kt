@@ -1,14 +1,15 @@
 object Versions {
-  const val COROUTINES = "1.4.3"
-  const val DOKKA = "1.4.30"
-  const val KOTLIN = "1.4.32"
-  const val KOTLIN_POET = "1.8.0"
-  const val KOTLIN_COMPILE_TESTING = "1.3.6"
-  const val KOTLINX_SERIALIZATION = "1.1.0"
-  const val KSP = "1.4.32-1.0.0-alpha07"
-  const val KTLINT_GRADLE_PLUGIN = "10.0.0"
-  const val KTOR = "2.0.0-eap-80"
-  const val MAVEN_PUBLISH_PLUGIN = "0.14.2"
+  const val COROUTINES = "1.5.2-native-mt"
+  const val DOKKA = "1.5.0"
+  const val KOTLIN = "1.5.30"
+  const val KOTLIN_POET = "1.9.0"
+  const val KOTLIN_COMPILE_TESTING = "1.4.4"
+  const val KOTLINX_SERIALIZATION = "1.3.0-RC"
+  const val KSP = "$KOTLIN-1.0.0"
+  const val KTLINT = "0.40.0"
+  const val KTLINT_GRADLE_PLUGIN = "10.1.0"
+  const val KTOR = "2.0.0-eap-213"
+  const val MAVEN_PUBLISH_PLUGIN = "0.17.0"
 }
 
 object Dependencies {
@@ -20,7 +21,7 @@ object Dependencies {
 
     object Serialization {
       const val CORE = "org.jetbrains.kotlinx:kotlinx-serialization-core:${Versions.KOTLINX_SERIALIZATION}"
-      const val JSON_JVM = "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:${Versions.KOTLINX_SERIALIZATION}"
+      const val JSON = "org.jetbrains.kotlinx:kotlinx-serialization-json:${Versions.KOTLINX_SERIALIZATION}"
     }
   }
 

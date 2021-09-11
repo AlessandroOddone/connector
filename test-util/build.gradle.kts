@@ -4,12 +4,18 @@ kotlin {
       dependencies {
         api(kotlin("test-common"))
         api(kotlin("test-annotations-common"))
-        api(Dependencies.KotlinX.Coroutines.TEST)
+        implementation(Dependencies.KotlinX.Coroutines.CORE)
       }
     }
     jvmMain {
       dependencies {
         api(kotlin("test-junit"))
+        api(Dependencies.KotlinX.Coroutines.TEST)
+      }
+    }
+    jsMain {
+      dependencies {
+        api(kotlin("test-js"))
       }
     }
   }

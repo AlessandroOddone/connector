@@ -10,11 +10,13 @@ import io.ktor.http.Url
 import io.ktor.http.content.ByteArrayContent
 import io.ktor.http.headersOf
 import io.ktor.http.takeFrom
+import kotlin.js.JsName
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class HttpRequestTests {
+  @JsName("constructor_defaults")
   @Test fun `constructor defaults`() = runTest {
     val request = HttpRequest(
       method = HttpMethod.Get,
@@ -24,6 +26,7 @@ class HttpRequestTests {
     assertEquals(EmptyContent, request.bodySupplier())
   }
 
+  @JsName("simple_copy")
   @Test fun `simple copy`() = runTest {
     val expectedBytes = Random.nextBytes(10)
     val original = HttpRequest(
@@ -44,6 +47,7 @@ class HttpRequestTests {
     assertArrayEquals(expectedBytes, actualBytes)
   }
 
+  @JsName("copy_updating_properties")
   @Test fun `copy updating properties`() = runTest {
     val original = HttpRequest(
       method = HttpMethod.Get,

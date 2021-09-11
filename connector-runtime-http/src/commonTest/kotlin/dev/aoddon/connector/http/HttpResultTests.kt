@@ -9,6 +9,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.headersOf
 import io.ktor.utils.io.errors.IOException
+import kotlin.js.JsName
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -18,6 +19,7 @@ import kotlin.test.assertSame
 class HttpResultTests {
   private val request = HttpRequest(HttpMethod.Get, Url("/"))
 
+  @JsName("Success_constructor_defaults")
   @Test fun `Success constructor defaults`() {
     val defaultSuccess = request.success()
     assertNull(defaultSuccess.body)
@@ -29,6 +31,7 @@ class HttpResultTests {
     assertSame(request, defaultSuccess.request)
   }
 
+  @JsName("simple_copy_of_Success")
   @Test fun `simple copy of Success`() {
     val original = request.success(
       status = HttpStatusCode.NotImplemented,
@@ -51,6 +54,7 @@ class HttpResultTests {
     assertSame(original.request, copy.request)
   }
 
+  @JsName("copy_of_Success_updating_properties")
   @Test fun `copy of Success updating properties`() {
     val original = request.success(body = "body")
     val copy = original.copy {
@@ -77,6 +81,7 @@ class HttpResultTests {
     assertSame(original.request, copy.request)
   }
 
+  @JsName("Response_Error_constructor_defaults")
   @Test fun `Response Error constructor defaults`() {
     val defaultResponseError = request.responseError()
     assertArrayEquals(ByteArray(0), defaultResponseError.body)
@@ -88,6 +93,7 @@ class HttpResultTests {
     assertSame(request, defaultResponseError.request)
   }
 
+  @JsName("simple_copy_of_Response_Error")
   @Test fun `simple copy of Response Error`() {
     val original = request.responseError(
       status = HttpStatusCode.BadRequest,
@@ -110,6 +116,7 @@ class HttpResultTests {
     assertSame(original.request, copy.request)
   }
 
+  @JsName("copy_of_Response_Error_updating_properties")
   @Test fun `copy of Response Error updating properties`() {
     val bytes = Random.nextBytes(10)
     val original = request.responseError(body = bytes)
@@ -137,12 +144,14 @@ class HttpResultTests {
     assertSame(original.request, copy.request)
   }
 
+  @JsName("simple_copy_of_Failure")
   @Test fun `simple copy of Failure`() {
     val copy = request.failure(IOException("oops")).copy()
     assertIs<IOException>(copy.exception)
     assertEquals("oops", copy.exception.message)
   }
 
+  @JsName("copy_of_Failure_updating_properties")
   @Test fun `copy of Failure updating properties`() {
     val original = request.failure(Throwable())
     val copy = original.copy {
@@ -152,6 +161,7 @@ class HttpResultTests {
     assertEquals("illegal", copy.exception.message)
   }
 
+  @JsName("HttpResponse_toSuccess")
   @Test fun `HttpResponse toSuccess`() {
     val expectedBody = "Success Body"
     val expectedStatus = HttpStatusCode.BadRequest
@@ -194,6 +204,7 @@ class HttpResultTests {
     originalError.toSuccess(expectedBody).assertExpected()
   }
 
+  @JsName("HttpResponse_toError")
   @Test fun `HttpResponse toError`() {
     val expectedBody = Random.nextBytes(10)
     val expectedStatus = HttpStatusCode.BadRequest
@@ -236,6 +247,7 @@ class HttpResultTests {
     originalError.toError(expectedBody).assertExpected()
   }
 
+  @JsName("HttpResult_toFailure")
   @Test fun `HttpResult toFailure`() {
     val success = request.success()
     val responseError = request.responseError()
@@ -254,6 +266,7 @@ class HttpResultTests {
     failure.toFailure(expectedException).assertExpected()
   }
 
+  @JsName("HttpResult_responseOrNull")
   @Test fun `HttpResult responseOrNull`() {
     val success = request.success("body")
     val responseError = request.responseError()
@@ -264,6 +277,7 @@ class HttpResultTests {
     assertNull(failure.responseOrNull())
   }
 
+  @JsName("HttpResult_responseOrThrow")
   @Test fun `HttpResult responseOrThrow`() {
     val success = request.success("body")
     val responseError = request.responseError()
@@ -274,6 +288,7 @@ class HttpResultTests {
     assertThrows<IOException>(":(") { failure.responseOrThrow() }
   }
 
+  @JsName("HttpResult_successOrNull")
   @Test fun `HttpResult successOrNull`() {
     val success = request.success("body")
     val responseError = request.responseError()
@@ -284,6 +299,7 @@ class HttpResultTests {
     assertNull(failure.successOrNull())
   }
 
+  @JsName("HttpResult_successOrThrow")
   @Test fun `HttpResult successOrThrow`() {
     val success = request.success("body")
     val responseError = request.responseError()
@@ -295,16 +311,18 @@ class HttpResultTests {
     assertThrows<IOException>(":(") { failure.successOrThrow() }
   }
 
+  @JsName("HttpResult_successBodyOrNull")
   @Test fun `HttpResult successBodyOrNull`() {
     val success = request.success("body")
     val responseError = request.responseError()
     val failure = request.failure(IOException(":("))
 
     assertSame("body", success.successBodyOrNull())
-    assertNull(responseError.successBodyOrNull())
-    assertNull(failure.successBodyOrNull())
+    assertNull(responseError.successBodyOrNull<Nothing>())
+    assertNull(failure.successBodyOrNull<Nothing>())
   }
 
+  @JsName("HttpResult_successBodyOrThrow")
   @Test fun `HttpResult successBodyOrThrow`() {
     val success = request.success("body")
     val responseError = request.responseError()

@@ -14,23 +14,22 @@ plugins {
   id("signing")
 }
 
-subprojects {
+allprojects {
   repositories {
-    gradlePluginPortal()
-    google()
     mavenCentral()
     maven { url = uri("https://maven.pkg.jetbrains.space/public/p/ktor/eap") }
     mavenLocal()
   }
+}
 
+subprojects {
   tasks.withType<KotlinCompile> {
     kotlinOptions {
       jvmTarget = "1.8"
-      useIR = true
+      allWarningsAsErrors = true
       freeCompilerArgs = freeCompilerArgs + listOf(
         "-Xopt-in=kotlin.RequiresOptIn",
-        "-Xopt-in=kotlin.contracts.ExperimentalContracts",
-        "-Xopt-in=io.ktor.util.KtorExperimentalAPI"
+        "-Xopt-in=kotlin.contracts.ExperimentalContracts"
       )
     }
   }
@@ -59,27 +58,47 @@ subprojects {
   if (!isJvmOnly) {
     configure<KotlinMultiplatformExtension> {
       jvm()
-      /* TODO enable other targets as KSP adds support for them
       js {
-        browser {
-        }
-        nodejs {
-        }
+        browser()
+        nodejs()
       }
-      macosX64()
-      ios()
-      watchos()
-      tvos()
-      linuxX64()
-      linuxArm32Hfp()
-      linuxMips32()
-      androidNativeArm32()
-      androidNativeArm64()
-      mingwX64()
-      */
+      val nativeTargets = listOf(
+        // Apple
+        iosArm64(),
+        iosX64(),
+        macosX64(),
+        tvosArm64(),
+        tvosX64(),
+        watchosArm32(),
+        watchosArm64(),
+        watchosX86(),
+        // Linux
+        linuxX64(),
+        // Windows
+        mingwX64(),
+      )
 
-      sourceSets.all {
-        languageSettings.useExperimentalAnnotation("kotlin.contracts.ExperimentalContracts")
+      sourceSets {
+        val commonMain by getting
+        val commonTest by getting
+        val nativeMain by creating {
+          dependsOn(commonMain)
+        }
+        val nativeTest by creating {
+          dependsOn(commonTest)
+        }
+        for (nativeTarget in nativeTargets) {
+          getByName("${nativeTarget.name}Main") {
+            dependsOn(nativeMain)
+          }
+          getByName("${nativeTarget.name}Test") {
+            dependsOn(nativeTest)
+          }
+        }
+
+        all {
+          languageSettings.optIn("kotlin.contracts.ExperimentalContracts")
+        }
       }
     }
   }
@@ -94,6 +113,7 @@ subprojects {
   apply(plugin = "org.jlleitschuh.gradle.ktlint")
   configure<KtlintExtension> {
     enableExperimentalRules.set(true)
+    version.set(Versions.KTLINT)
   }
 }
 
@@ -107,9 +127,7 @@ signing {
 }
 
 fun Project.isJvmOnly(): Boolean {
-  return name.endsWith("codegen") ||
-    name.endsWith("processor") ||
-    name == "e2e-tests"
+  return name.endsWith("codegen") || name.endsWith("processor")
 }
 
 fun Project.isInternal(): Boolean {
