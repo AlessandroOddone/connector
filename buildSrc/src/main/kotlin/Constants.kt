@@ -1,7 +1,7 @@
 object Versions {
   const val COROUTINES = "1.5.2-native-mt"
   const val DOKKA = "1.5.0"
-  const val KOTLIN = "1.5.30"
+  const val KOTLIN = "1.5.31"
   const val KOTLIN_POET = "1.9.0"
   const val KOTLIN_COMPILE_TESTING = "1.4.4"
   const val KOTLINX_SERIALIZATION = "1.3.0-RC"
